@@ -107,7 +107,6 @@ process {
                 Write-Verbose "Destination coordinate '$coordinate'"
 
                 $results += @{
-                    rowNumber   = $rowNumber
                     coordinate  = @{
                         start       = $startCoordinate
                         destination = $coordinate
