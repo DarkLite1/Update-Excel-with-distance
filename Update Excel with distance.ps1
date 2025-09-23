@@ -15,7 +15,7 @@ param (
         startDestination = 'F'
         coordinate       = 'G'
         distance         = 'H'
-        travelTime       = 'I'
+        duration         = 'I'
     }
 )
 
@@ -71,8 +71,8 @@ process {
                 $ColumnLetterHeader.coordinate, $rowNumber
                 distance         = '{0}{1}' -f 
                 $ColumnLetterHeader.distance, $rowNumber
-                travelTime       = '{0}{1}' -f 
-                $ColumnLetterHeader.travelTime, $rowNumber
+                duration         = '{0}{1}' -f 
+                $ColumnLetterHeader.duration, $rowNumber
             }
             #endregion
 
@@ -113,9 +113,11 @@ process {
                         destination = $coordinate
                     }
                     cellAddress = @{
-                        distance   = $cellAddress.distance
-                        travelTime = $cellAddress.travelTime
+                        distance = $cellAddress.distance
+                        duration = $cellAddress.duration
                     }
+                    apiResponse = $null
+                    error       = $null
                 }
             }
             #endregion
