@@ -50,6 +50,7 @@ begin {
 
 process {
     try {
+        #region Get data from Excel sheet
         $results = @()
         $startCoordinate = $null
         
@@ -121,6 +122,7 @@ process {
         }
 
         Write-Verbose "Found $($results.Count) start and destination pairs"
+        #endregion
     }
     catch {
         throw "Failed processing Excel file '$ExcelFilePath': $_"
