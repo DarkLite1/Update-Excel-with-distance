@@ -97,7 +97,6 @@ process {
                     { ($_.Start.Address -eq $cellAddress.coordinate) }
                 )
             ).Value
-            #endregion
 
             if ($isStartCoordinateRow) {
                 Write-Verbose "Start coordinate '$coordinate'"
@@ -119,6 +118,7 @@ process {
                     }
                 }
             }
+            #endregion
         }
 
         Write-Verbose "Found $($results.Count) start and destination pairs"
