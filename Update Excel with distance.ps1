@@ -142,6 +142,23 @@ process {
             }
         }
         #endregion
+
+        #region Update Excel sheet
+        foreach (
+            $pair in $results.Where({ -not $_.error })
+        ) {
+            try {
+                #region Set distance and duration 
+                $sheet.Cells[$pair.cellAddress.destination].Value = $pair.apiResponse.routes[0].distance
+
+                $sheet.Cells[$pair.cellAddress.duration].Value = $pair.apiResponse.routes[0].duration
+                #endregion
+            }
+            catch {
+                $pair.error = "Failed updating Excel sheet with distance and duration for destination cell '$($pair.cellAddress.destination)' and duration cell '$($pair.cellAddress.duration)': $_"
+            }
+        }
+        #endregion
     }
     catch {
         throw "Failed processing Excel file '$ExcelFilePath': $_"
