@@ -123,6 +123,23 @@ process {
 
         Write-Verbose "Found $($results.Count) start and destination pairs"
         #endregion
+
+        #region Get distance and travel time from OSRM API
+        foreach ($pair in $results) {
+            try {
+                $params = @{
+                    Uri = (
+                        'https://router.project-osrm.org/route/v1/driving/{0};{1}' -f
+                        $pair.coordinate.start, $pair.coordinate.destination
+                    ) -replace '\s'
+                }                        
+                $pair.apiResponse = Invoke-RestMethod @params
+            }
+            catch {
+                $pair.error = $_
+            }
+        }
+        #endregion
     }
     catch {
         throw "Failed processing Excel file '$ExcelFilePath': $_"
