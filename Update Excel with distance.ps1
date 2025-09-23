@@ -100,9 +100,9 @@ process {
             #endregion
 
             if ($isStartCoordinateRow) {
+                Write-Verbose "Start coordinate '$coordinate'"
+                
                 $startCoordinate = $coordinate
-
-                Write-Verbose "Start coordinate '$startCoordinate'"
             }
             elseif ($isDestinationCoordinateRow -and $startCoordinate) {
                 Write-Verbose "Destination coordinate '$coordinate'"
