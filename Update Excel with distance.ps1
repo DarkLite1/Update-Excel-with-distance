@@ -126,10 +126,10 @@ process {
         #endregion
 
         Write-Verbose "Found $($results.Count) start and destination pairs"
-
+        
+        #region Get distance and duration from OSRM API
         $i = 0
 
-        #region Get distance and duration from OSRM API
         foreach ($pair in $results) {
             try {
                 $params = @{
