@@ -9,7 +9,7 @@
 #>
 
 param (
-    [string]$ExcelFilePath = 'T:\Test\Brecht\PowerShell\Distance tracker.xlsx',
+    [string]$ExcelFilePath = 'T:\Test\Brecht\PowerShell\Logs\Distance tracker.xlsx',
     [string]$WorksheetName = 'Distances',
     [hashtable]$ColumnLetterHeader = @{
         startDestination = 'F'
@@ -117,7 +117,7 @@ process {
                         duration = $cellAddress.duration
                     }
                     apiResponse = $null
-                    error       = $null
+                    errors      = @()
                 }
             }
             #endregion
@@ -138,25 +138,42 @@ process {
                 $pair.apiResponse = Invoke-RestMethod @params
             }
             catch {
-                $pair.error = $_
+                $pair.errors += "Failed API request: $_"
             }
         }
         #endregion
 
         #region Update Excel sheet
         foreach (
-            $pair in $results.Where({ -not $_.error })
+            $pair in $results.Where({ -not $_.errors })
         ) {
+            #region Set distance
             try {
-                #region Set distance and duration 
-                $sheet.Cells[$pair.cellAddress.destination].Value = $pair.apiResponse.routes[0].distance
+                $distanceCell = $pair.cellAddress.distance
+                $distanceValue = $pair.apiResponse.routes[0].distance
 
-                $sheet.Cells[$pair.cellAddress.duration].Value = $pair.apiResponse.routes[0].duration
-                #endregion
+                Write-Verbose "Set distance in cell '$distanceCell' value '$distanceValue'"
+
+                $sheet.Cells[$distanceCell].Value = $distanceValue
             }
             catch {
-                $pair.error = "Failed updating Excel sheet with distance and duration for destination cell '$($pair.cellAddress.destination)' and duration cell '$($pair.cellAddress.duration)': $_"
+                $pair.errors += "Failed to set distance in cell '$distanceCell' with value '$distanceValue': $_"
             }
+            #endregion
+            
+            #region Set duration
+            try {
+                $durationCell = $pair.cellAddress.duration
+                $durationValue = $pair.apiResponse.routes[0].duration
+
+                Write-Verbose "Set distance in cell '$durationCell' value '$durationValue'"
+
+                $sheet.Cells[$durationCell].Value = $durationValue
+            }
+            catch {
+                $pair.errors += "Failed to set duration in cell '$durationCell' with value '$durationValue': $_"
+            }
+            #endregion
         }
         #endregion
     }
