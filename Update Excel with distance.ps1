@@ -123,9 +123,11 @@ process {
             }
             #endregion
         }
+        #endregion
 
         Write-Verbose "Found $($results.Count) start and destination pairs"
-        #endregion
+
+        $i = 0
 
         #region Get distance and duration from OSRM API
         foreach ($pair in $results) {
@@ -138,7 +140,8 @@ process {
                     Verbose = $false
                 }
 
-                Write-Verbose "Call API endpoint '$($params.Uri)'"
+                $i++
+                Write-Verbose "$i/$($results.Count): call API endpoint '$($params.Uri)'"
 
                 $pair.apiResponse = Invoke-RestMethod @params
             }
