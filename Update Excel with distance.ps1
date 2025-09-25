@@ -60,8 +60,6 @@ process {
         ) {
             $rowNumber = $row.Name
 
-            Write-Verbose "Row '$rowNumber'"
-
             $rowCells = $row.Group
 
             #region Create cell addresses
@@ -100,12 +98,12 @@ process {
             ).Value
 
             if ($isStartCoordinateRow) {
-                Write-Verbose "Start coordinate '$coordinate'"
+                Write-Verbose "Row '$rowNumber' start coordinate '$coordinate'"
                 
                 $startCoordinate = $coordinate
             }
             elseif ($isDestinationCoordinateRow -and $startCoordinate) {
-                Write-Verbose "Destination coordinate '$coordinate'"
+                Write-Verbose "Row '$rowNumber' destination coordinate '$coordinate'"
 
                 $results += @{
                     coordinate  = @{
@@ -119,6 +117,9 @@ process {
                     apiResponse = $null
                     errors      = @()
                 }
+            }
+            else {
+                Write-Verbose "Row '$rowNumber' ignored, not a start or destination row"
             }
             #endregion
         }
