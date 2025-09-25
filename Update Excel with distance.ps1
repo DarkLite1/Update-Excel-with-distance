@@ -130,11 +130,15 @@ process {
         foreach ($pair in $results) {
             try {
                 $params = @{
-                    Uri = (
+                    Uri     = (
                         'https://router.project-osrm.org/route/v1/driving/{0};{1}' -f
                         $pair.coordinate.start, $pair.coordinate.destination
                     ) -replace '\s'
-                }                        
+                    Verbose = $false
+                }
+
+                Write-Verbose "Call API endpoint '$($params.Uri)'"
+
                 $pair.apiResponse = Invoke-RestMethod @params
             }
             catch {
