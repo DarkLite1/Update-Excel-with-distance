@@ -185,7 +185,7 @@ process {
                 $sheet.Cells[$durationCell].Style.NumberFormat.Format = '0\ \m\i\n'
             }
             catch {
-                $pair.errors += "Failed to set duration in cell '$durationCell' value '$durationValue': $_"
+                $pair.errors += "Failed to set duration in cell '$durationCell' with value '$durationValue': $_"
             }
             #endregion
         }
