@@ -162,7 +162,10 @@ process {
 
                 Write-Verbose "Set distance in cell '$distanceCell' value '$distanceValue'"
 
-                $sheet.Cells[$distanceCell].Value = $distanceValue
+                # distance is returned in meters, we need km
+                $sheet.Cells[$distanceCell].Value = $distanceValue / 1000
+
+                $sheet.Cells[$distanceCell].Style.NumberFormat.Format = '0.00 \ \k\m'
             }
             catch {
                 $pair.errors += "Failed to set distance in cell '$distanceCell' with value '$distanceValue': $_"
@@ -176,10 +179,13 @@ process {
 
                 Write-Verbose "Set distance in cell '$durationCell' value '$durationValue'"
 
-                $sheet.Cells[$durationCell].Value = $durationValue
+                # duration is returned in seconds, we need minutes
+                $sheet.Cells[$durationCell].Value = $durationValue / 60
+
+                $sheet.Cells[$durationCell].Style.NumberFormat.Format = '0\ \m\i\n'
             }
             catch {
-                $pair.errors += "Failed to set duration in cell '$durationCell' with value '$durationValue': $_"
+                $pair.errors += "Failed to set duration in cell '$durationCell' value '$durationValue': $_"
             }
             #endregion
         }
