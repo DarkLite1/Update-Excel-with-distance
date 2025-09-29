@@ -2,7 +2,7 @@
   "Excel": {
     "FilePath": "C:\\Distance tracker.xlsx",
     "WorksheetName": "Distances",
-    "ColumnLetterHeader": {
+    "Column": {
       "startDestination": "F",
       "coordinate": "G",
       "distance": "H",
@@ -52,7 +52,7 @@
     "Excel": {
       "FilePath": "(Mandatory) The path to the Excel file.",
       "WorksheetName": "(Mandatory) The name of the worksheet in the Excel file that contains the coordinates.",
-      "ColumnLetterHeader": {
+      "Column": {
         "startDestination": "(Mandatory) The column containing the letter 'S' for source or 'D' for destination.",
         "coordinate": "(Mandatory) The column containing the start and destination coordinates.",
         "distance": "(Mandatory) The column where to write the distance in kilometers between the source and the destination coordinates.",

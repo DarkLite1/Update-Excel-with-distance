@@ -7,14 +7,17 @@ BeforeAll {
     }
 
     $testInputFile = @{
-        Source      = @{
-            Folder             = (New-Item 'TestDrive:/s' -ItemType Directory).FullName
-            MatchFileNameRegex = 'Analyse_[0-9]{8}.xlsx'
+        Excel    = @{
+            FilePath      = (New-Item 'TestDrive:/file.xlsx' -ItemType File).FullName
+            WorksheetName = 'sheet1'
+            Column        = @{
+                startDestination = 'A'
+                coordinate       = 'B'
+                distance         = 'C'
+                duration         = 'D'
+            }
         }
-        Destination = @{
-            Folder = (New-Item 'TestDrive:/d' -ItemType Directory).FullName
-        }
-        Settings    = @{
+        Settings = @{
             ScriptName     = 'Test (Brecht)'
             SendMail       = @{
                 When         = 'Always'
@@ -122,6 +125,7 @@ BeforeAll {
         )
     }
 
+    Mock Invoke-RestMethod
     Mock Send-MailKitMessageHC
     Mock New-EventLog
     Mock Write-EventLog
