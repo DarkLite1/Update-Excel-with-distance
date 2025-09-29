@@ -21,14 +21,6 @@
 param (
     [Parameter(Mandatory)]
     [string]$ConfigurationJsonFile
-    # [string]$ExcelFilePath = 'T:\Test\Brecht\PowerShell\Logs\Distance tracker.xlsx',
-    # [string]$WorksheetName = 'Distances',
-    # [hashtable]$ColumnLetterHeader = @{
-    #     startDestination = 'F'
-    #     coordinate       = 'G'
-    #     distance         = 'H'
-    #     duration         = 'I'
-    # }
 )
 
 begin {
@@ -68,7 +60,7 @@ begin {
         )
 
         @(
-            'FilePath', 'WorksheetName', 'ColumnLetterHeader'
+            'FilePath', 'WorksheetName', 'Column'
         ).where(
             { -not $jsonFileContent.Excel.$_ }
         ).foreach(
@@ -78,9 +70,9 @@ begin {
         @(
             'startDestination', 'coordinate', 'distance', 'duration'
         ).where(
-            { -not $jsonFileContent.Excel.ColumnLetterHeader.$_ }
+            { -not $jsonFileContent.Excel.Column.$_ }
         ).foreach(
-            { throw "Property 'Excel.ColumnLetterHeader.$_' not found" }
+            { throw "Property 'Excel.Column.$_' not found" }
         )
 
         $ExcelFilePath = $jsonFileContent.Excel.FilePath
