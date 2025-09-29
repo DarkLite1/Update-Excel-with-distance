@@ -60,6 +60,23 @@ BeforeAll {
         FilePath = (New-Item 'TestDrive:/Test.json' -ItemType File).FullName
     }
 
+    $testData = @(
+        [PSCustomObject]@{
+            Coordinate = 1; Type = 'S'; Distance = ''; Duration = '' 
+        }
+        [PSCustomObject]@{
+            Coordinate = 2; Type = 'D'; Distance = '' ; Duration = '' 
+        }
+        [PSCustomObject]@{
+            Coordinate = 3; Type = 'S'; Distance = '' ; Duration = '' 
+        }
+        [PSCustomObject]@{
+            Coordinate = 4; Type = 'D'; Distance = '' ; Duration = '' 
+        }
+    )
+
+    $testData | Export-Excel -Path $testInputFile.Excel.FilePath
+
     $testScript = $PSCommandPath.Replace('.Tests.ps1', '.ps1')
     $testParams = @{
         ConfigurationJsonFile = $testOutParams.FilePath
@@ -134,5 +151,98 @@ Describe 'the mandatory parameters are' {
     It '<_>' -ForEach @('ConfigurationJsonFile') {
         (Get-Command $testScript).Parameters[$_].Attributes.Mandatory |
         Should -BeTrue
+    }
+}
+Describe 'create an error log file when' {
+    It 'the log folder cannot be created' {
+        Mock Out-File
+
+        $testNewInputFile = Copy-ObjectHC $testInputFile
+        $testNewInputFile.Settings.SaveLogFiles.Where.Folder = 'x:\notExistingLocation'
+
+        & $realCmdLet.OutFile @testOutParams -InputObject (
+            $testNewInputFile | ConvertTo-Json -Depth 7
+        )
+
+        .$testScript @testParams
+
+        $LASTEXITCODE | Should -Be 1
+
+        Should -Not -Invoke Out-File
+    }
+    Context 'the ConfigurationJsonFile' {
+        It 'is not found' {
+            Mock Out-File
+
+            $testNewParams = $testParams.clone()
+            $testNewParams.ConfigurationJsonFile = 'nonExisting.json'
+
+            .$testScript @testNewParams
+
+            $LASTEXITCODE | Should -Be 1
+
+            Should -Not -Invoke Out-File
+        }
+        Context 'property' {
+            It '<_> not found' -ForEach @(
+                'Excel'
+            ) {
+                Mock Out-File
+
+                $testNewInputFile = Copy-ObjectHC $testInputFile
+                $testNewInputFile.$_ = $null
+
+                & $realCmdLet.OutFile @testOutParams -InputObject (
+                    $testNewInputFile | ConvertTo-Json -Depth 7
+                )
+
+                .$testScript @testParams
+
+                $LASTEXITCODE | Should -Be 1
+
+                Should -Invoke Out-File -Times 1 -Exactly -ParameterFilter {
+                    ($LiteralPath -like '* - Errors.json') -and
+                    ($InputObject -like "*Property '$_' not found*")
+                }
+            }
+            It 'Excel.<_> not found' -ForEach @(
+                'FilePath', 'WorksheetName', 'Column'
+            ) {
+                Mock Out-File
+
+                $testNewInputFile = Copy-ObjectHC $testInputFile
+                $testNewInputFile.Excel.$_ = $null
+
+                & $realCmdLet.OutFile @testOutParams -InputObject (
+                    $testNewInputFile | ConvertTo-Json -Depth 7
+                )
+
+                .$testScript @testParams
+
+                Should -Invoke Out-File -Times 1 -Exactly -ParameterFilter {
+                    ($LiteralPath -like '* - Errors.json') -and
+                    ($InputObject -like "*Property 'Excel.$_' not found*")
+                }
+            }
+            It 'Excel.Column.<_> not found' -ForEach @(
+                'StartDestination', 'Coordinate', 'Distance', 'Duration'
+            ) {
+                Mock Out-File
+
+                $testNewInputFile = Copy-ObjectHC $testInputFile
+                $testNewInputFile.Excel.Column.$_ = $null
+
+                & $realCmdLet.OutFile @testOutParams -InputObject (
+                    $testNewInputFile | ConvertTo-Json -Depth 7
+                )
+
+                .$testScript @testParams
+
+                Should -Invoke Out-File -Times 1 -Exactly -ParameterFilter {
+                    ($LiteralPath -like '* - Errors.json') -and
+                    ($InputObject -like "*Property 'Excel.Column.$_' not found*")
+                }
+            }
+        }
     }
 }
