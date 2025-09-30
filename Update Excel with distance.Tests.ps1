@@ -245,4 +245,23 @@ Describe 'create an error log file when' {
             }
         }
     }
+    It 'The Excel.FilePath cannot be found' {
+        Mock Out-File
+
+        $testNewInputFile = Copy-ObjectHC $testInputFile
+        $testNewInputFile.Excel.FilePath = 'TestDrive:\NotExisting.xslx'
+
+        & $realCmdLet.OutFile @testOutParams -InputObject (
+            $testNewInputFile | ConvertTo-Json -Depth 7
+        )
+
+        .$testScript @testParams
+
+        $LASTEXITCODE | Should -Be 1
+
+        Should -Invoke Out-File -Times 1 -Exactly -ParameterFilter {
+            ($LiteralPath -like '* - Errors.json') -and
+            ($InputObject -like "*Excel file 'TestDrive:\\NotExisting.xslx' not found*")
+        }
+    }
 }
