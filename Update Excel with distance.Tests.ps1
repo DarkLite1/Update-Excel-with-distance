@@ -201,7 +201,7 @@ Describe 'create an error log file when' {
                 $LASTEXITCODE | Should -Be 1
 
                 Should -Invoke Out-File -Times 1 -Exactly -ParameterFilter {
-                    ($LiteralPath -like '* - Errors.json') -and
+                    ($LiteralPath -like '* - System errors log.json') -and
                     ($InputObject -like "*Property '$_' not found*")
                 }
             }
@@ -220,7 +220,7 @@ Describe 'create an error log file when' {
                 .$testScript @testParams
 
                 Should -Invoke Out-File -Times 1 -Exactly -ParameterFilter {
-                    ($LiteralPath -like '* - Errors.json') -and
+                    ($LiteralPath -like '* - System errors log.json') -and
                     ($InputObject -like "*Property 'Excel.$_' not found*")
                 }
             }
@@ -239,7 +239,7 @@ Describe 'create an error log file when' {
                 .$testScript @testParams
 
                 Should -Invoke Out-File -Times 1 -Exactly -ParameterFilter {
-                    ($LiteralPath -like '* - Errors.json') -and
+                    ($LiteralPath -like '* - System errors log.json') -and
                     ($InputObject -like "*Property 'Excel.Column.$_' not found*")
                 }
             }
@@ -260,7 +260,7 @@ Describe 'create an error log file when' {
         $LASTEXITCODE | Should -Be 1
 
         Should -Invoke Out-File -Times 1 -Exactly -ParameterFilter {
-            ($LiteralPath -like '* - Errors.json') -and
+            ($LiteralPath -like '* - System errors log.json') -and
             ($InputObject -like "*Excel file 'TestDrive:\\NotExisting.xslx' not found*")
         }
     }

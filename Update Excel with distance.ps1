@@ -154,7 +154,6 @@ process {
 
         Write-Verbose $eventLogData[-1].Message
 
-        $results = @()
         $startCoordinate = $null
         
         foreach (
@@ -205,18 +204,20 @@ process {
             elseif ($isDestinationCoordinateRow -and $startCoordinate) {
                 Write-Verbose "Row '$rowNumber' destination coordinate '$coordinate'"
 
-                $results += @{
-                    coordinate  = @{
-                        start       = $startCoordinate
-                        destination = $coordinate
+                $logFileData.Add(
+                    @{
+                        coordinate  = @{
+                            start       = $startCoordinate
+                            destination = $coordinate
+                        }
+                        cellAddress = @{
+                            distance = $cellAddress.distance
+                            duration = $cellAddress.duration
+                        }
+                        apiResponse = $null
+                        errors      = @()
                     }
-                    cellAddress = @{
-                        distance = $cellAddress.distance
-                        duration = $cellAddress.duration
-                    }
-                    apiResponse = $null
-                    errors      = @()
-                }
+                )
             }
             else {
                 Write-Verbose "Row '$rowNumber' ignored, not a start or destination row"
@@ -224,13 +225,13 @@ process {
             #endregion
         }
 
-        Write-Verbose "Found $($results.Count) start and destination pairs"
+        Write-Verbose "Found $($logFileData.Count) start and destination pairs"
         #endregion
         
         #region Get distance and duration from OSRM API
         $eventLogData.Add(
             [PSCustomObject]@{
-                Message   = "Get distance and duration from OSRM API for $($results.Count) coordinate pairs"
+                Message   = "Get distance and duration from OSRM API for $($logFileData.Count) coordinate pairs"
                 EntryType = 'Information'
                 EventID   = '4'
             }
@@ -240,7 +241,7 @@ process {
 
         $i = 0
 
-        foreach ($pair in $results) {
+        foreach ($pair in $logFileData) {
             try {
                 $params = @{
                     Uri     = (
@@ -251,7 +252,7 @@ process {
                 }
 
                 $i++
-                Write-Verbose "$i/$($results.Count): call API endpoint '$($params.Uri)'"
+                Write-Verbose "$i/$($logFileData.Count): call API endpoint '$($params.Uri)'"
 
                 $pair.apiResponse = Invoke-RestMethod @params
             }
@@ -273,7 +274,7 @@ process {
         Write-Verbose $eventLogData[-1].Message
 
         foreach (
-            $pair in $results.Where({ -not $_.errors })
+            $pair in $logFileData.Where({ -not $_.errors })
         ) {
             #region Set distance
             try {
@@ -1159,7 +1160,7 @@ end {
         $saveLogFiles = $settings.SaveLogFiles
 
         $allLogFilePaths = @()
-        $logFileDataErrors = $logFileData.Where({ $_.Error })
+        $logFileDataErrors = $logFileData.Where({ $_.errors })
         $baseLogName = $null
         $logFolderPath = $null
 
@@ -1202,35 +1203,24 @@ end {
 
                 #region Create log file
                 if ($logFileData) {
+                    $params = @{
+                        PartialPath    = "$baseLogName - Log"
+                        FileExtensions = $logFileExtensions
+                    }
                     if ($isLog.allActions) {
-                        $params = @{
-                            DataToExport   = $logFileData
-                            PartialPath    = if ($logFileDataErrors) {
-                                "$baseLogName - Actions with errors"
-                            }
-                            else {
-                                "$baseLogName - Actions"
-                            }
-                            FileExtensions = $logFileExtensions
-                        }
+                        $params.DataToExport = $logFileData
                         $allLogFilePaths += Out-LogFileHC @params
                     }
-                    elseif ($isLog.onlyActionErrors) {
-                        if ($logFileDataErrors) {
-                            $params = @{
-                                DataToExport   = $logFileDataErrors
-                                PartialPath    = "$baseLogName - Action errors"
-                                FileExtensions = $logFileExtensions
-                            }
-                            $allLogFilePaths += Out-LogFileHC @params
-                        }
+                    elseif ($isLog.onlyActionErrors -and $logFileDataErrors) {
+                        $params.DataToExport = $logFileDataErrors
+                        $allLogFilePaths += Out-LogFileHC @params
                     }
                 }
 
-                if ($systemErrors -and $isLog.SystemErrors) {
+                if ($isLog.SystemErrors -and $systemErrors) {
                     $params = @{
                         DataToExport   = $systemErrors
-                        PartialPath    = "$baseLogName - Errors"
+                        PartialPath    = "$baseLogName - System errors log"
                         FileExtensions = $logFileExtensions
                     }
                     $allLogFilePaths += Out-LogFileHC @params
