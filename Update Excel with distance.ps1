@@ -253,7 +253,7 @@ process {
                 $durationCell = $pair.cellAddress.duration
                 $durationValue = $pair.apiResponse.routes[0].duration
 
-                Write-Verbose "Set distance in cell '$durationCell' value '$durationValue'"
+                Write-Verbose "Set duration in cell '$durationCell' value '$durationValue'"
 
                 # duration is returned in seconds, we need minutes
                 $sheet.Cells[$durationCell].Value = $durationValue / 60
