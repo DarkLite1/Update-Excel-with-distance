@@ -90,7 +90,14 @@ begin {
         
         try {
             #region Open Excel worksheet
-            Write-Verbose "Open Excel file '$ExcelFilePath'"
+            $eventLogData.Add(
+                [PSCustomObject]@{
+                    Message   = "Open Excel file '$ExcelFilePath'"
+                    EntryType = 'Information'
+                    EventID   = '4'
+                }
+            )
+            Write-Verbose $eventLogData[-1].Message
 
             $excelPackage = Open-ExcelPackage -Path $ExcelFilePath
 
@@ -100,7 +107,14 @@ begin {
             #endregion
 
             #region Get sheet data
-            Write-Verbose "Get data in worksheet '$WorksheetName'"
+            $eventLogData.Add(
+                [PSCustomObject]@{
+                    Message   = "Get data in worksheet '$WorksheetName'"
+                    EntryType = 'Information'
+                    EventID   = '4'
+                }
+            )
+            Write-Verbose $eventLogData[-1].Message
 
             $sheet = $excelPackage.Workbook.Worksheets[$WorksheetName]
 
@@ -130,6 +144,16 @@ process {
 
     try {
         #region Get data from Excel sheet
+        $eventLogData.Add(
+            [PSCustomObject]@{
+                Message   = 'Get data from Excel sheet'
+                EntryType = 'Information'
+                EventID   = '4'
+            }
+        )
+
+        Write-Verbose $eventLogData[-1].Message
+
         $results = @()
         $startCoordinate = $null
         
@@ -204,6 +228,16 @@ process {
         #endregion
         
         #region Get distance and duration from OSRM API
+        $eventLogData.Add(
+            [PSCustomObject]@{
+                Message   = "Get distance and duration from OSRM API for $($results.Count) coordinate pairs"
+                EntryType = 'Information'
+                EventID   = '4'
+            }
+        )
+
+        Write-Verbose $eventLogData[-1].Message
+
         $i = 0
 
         foreach ($pair in $results) {
@@ -228,6 +262,16 @@ process {
         #endregion
 
         #region Update Excel sheet
+        $eventLogData.Add(
+            [PSCustomObject]@{
+                Message   = "Update Excel sheet '$WorksheetName'"
+                EntryType = 'Information'
+                EventID   = '4'
+            }
+        )
+
+        Write-Verbose $eventLogData[-1].Message
+
         foreach (
             $pair in $results.Where({ -not $_.errors })
         ) {
@@ -279,7 +323,16 @@ process {
     }
     finally {
         if ($excelPackage) {
-            Write-Verbose 'Close Excel file'
+            $eventLogData.Add(
+                [PSCustomObject]@{
+                    Message   = 'Save updates in Excel and close file'
+                    EntryType = 'Information'
+                    EventID   = '4'
+                }
+            )
+
+            Write-Verbose $eventLogData[-1].Message
+        
             Close-ExcelPackage -ExcelPackage $excelPackage -EA Ignore
         }
     }
