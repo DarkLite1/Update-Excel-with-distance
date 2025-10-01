@@ -206,6 +206,7 @@ process {
 
                 $logFileData.Add(
                     @{
+                        dateTime    = Get-Date
                         coordinate  = @{
                             start       = $startCoordinate
                             destination = $coordinate
@@ -225,19 +226,29 @@ process {
             #endregion
         }
 
-        Write-Verbose "Found $($logFileData.Count) start and destination pairs"
-        #endregion
-        
-        #region Get distance and duration from OSRM API
         $eventLogData.Add(
             [PSCustomObject]@{
-                Message   = "Get distance and duration from OSRM API for $($logFileData.Count) coordinate pairs"
+                Message   = "Found $($logFileData.Count) start and destination pairs"
                 EntryType = 'Information'
                 EventID   = '4'
             }
         )
 
         Write-Verbose $eventLogData[-1].Message
+        #endregion
+        
+        #region Get distance and duration from OSRM API
+        if ($logFileData) {
+            $eventLogData.Add(
+                [PSCustomObject]@{
+                    Message   = "Get distance and duration from OSRM API for $($logFileData.Count) coordinate pairs"
+                    EntryType = 'Information'
+                    EventID   = '4'
+                }
+            )
+
+            Write-Verbose $eventLogData[-1].Message
+        }
 
         $i = 0
 
@@ -263,15 +274,17 @@ process {
         #endregion
 
         #region Update Excel sheet
-        $eventLogData.Add(
-            [PSCustomObject]@{
-                Message   = "Update Excel sheet '$WorksheetName'"
-                EntryType = 'Information'
-                EventID   = '4'
-            }
-        )
-
-        Write-Verbose $eventLogData[-1].Message
+        if ($logFileData.Where({ -not $_.errors })) {
+            $eventLogData.Add(
+                [PSCustomObject]@{
+                    Message   = "Update Excel sheet '$WorksheetName'"
+                    EntryType = 'Information'
+                    EventID   = '4'
+                }
+            )
+                
+            Write-Verbose $eventLogData[-1].Message
+        }
 
         foreach (
             $pair in $logFileData.Where({ -not $_.errors })
@@ -1207,7 +1220,7 @@ end {
                         PartialPath    = "$baseLogName - Log"
                         FileExtensions = $logFileExtensions
                     }
-                    
+
                     if ($isLog.allActions) {
                         $params.DataToExport = $logFileData
                         
@@ -1219,6 +1232,10 @@ end {
                     if ($params.DataToExport) {
                         $params.DataToExport = $params.DataToExport | 
                         Select-Object -Property @{
+                            Name       = 'dateTime'
+                            Expression = { $_.dateTime } 
+                        },
+                        @{
                             Name       = 'startCoordinate'
                             Expression = { $_.coordinate.start } 
                         },
@@ -1465,7 +1482,7 @@ end {
 
             <table>
                 <tr>
-                    <th>Actions</th>
+                    <th>Start and destination pairs</th>
                     <td>$($logFileData.Count)</td>
                 </tr>
                 $(
@@ -1475,7 +1492,7 @@ end {
                         '<tr>'
                     }
                 )
-                    <th>Action errors</th>
+                    <th>Retrieval or update errors</th>
                     <td>$($logFileDataErrors.Count)</td>
                 </tr>
                 $(

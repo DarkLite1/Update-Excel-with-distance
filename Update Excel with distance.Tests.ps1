@@ -11,8 +11,8 @@ BeforeAll {
             FilePath      = (New-Item 'TestDrive:/file.xlsx' -ItemType File).FullName
             WorksheetName = 'sheet1'
             Column        = @{
-                startDestination = 'A'
-                coordinate       = 'B'
+                startDestination = 'B'
+                coordinate       = 'A'
                 distance         = 'C'
                 duration         = 'D'
             }
@@ -62,20 +62,39 @@ BeforeAll {
 
     $testData = @(
         [PSCustomObject]@{
-            Coordinate = 1; Type = 'S'; Distance = ''; Duration = '' 
+            Coordinate = 1; Type = 'S'; Distance = $null; Duration = $null 
         }
         [PSCustomObject]@{
-            Coordinate = 2; Type = 'D'; Distance = '' ; Duration = '' 
+            Coordinate = 2; Type = 'D'; Distance = $null ; Duration = $null 
         }
         [PSCustomObject]@{
-            Coordinate = 3; Type = 'S'; Distance = '' ; Duration = '' 
+            Coordinate = 3; Type = 'S'; Distance = $null ; Duration = $null 
         }
         [PSCustomObject]@{
-            Coordinate = 4; Type = 'D'; Distance = '' ; Duration = '' 
+            Coordinate = 4; Type = 'D'; Distance = $null ; Duration = $null 
         }
     )
 
     $testData | Export-Excel -Path $testInputFile.Excel.FilePath
+
+    $testExportedLogFileData = @(
+        [PSCustomObject]@{
+            dateTime              = Get-Date
+            startCoordinate       = 1
+            destinationCoordinate = 2
+            distanceInMeters      = 1033101.5
+            durationInSeconds     = 143222.4
+            error                 = ''
+        }
+        [PSCustomObject]@{
+            dateTime              = Get-Date
+            startCoordinate       = 3
+            destinationCoordinate = 4
+            distanceInMeters      = 55000
+            durationInSeconds     = 6000
+            error                 = ''
+        }
+    )
 
     $testScript = $PSCommandPath.Replace('.Tests.ps1', '.ps1')
     $testParams = @{
@@ -141,24 +160,29 @@ BeforeAll {
             [PSCredential]$Credential
         )
     }
+    function Test-GetLogFileDataHC {
+        param (
+            [String]$FileNameRegex = '* - System errors log.json',
+            [String]$LogFolderPath = $testInputFile.Settings.SaveLogFiles.Where.Folder
+        )
+
+        $testLogFile = Get-ChildItem -Path $LogFolderPath -File -Filter $FileNameRegex
+
+        if ($testLogFile.count -eq 1) {
+            Get-Content $testLogFile | ConvertFrom-Json
+        }
+        elseif (-not $testLogFile) {
+            throw "No log file found in folder '$LogFolderPath' matching '$FileNameRegex'"
+        }
+        else {
+            throw "Found multiple log files in folder '$LogFolderPath' matching '$FileNameRegex'"
+        }
+    }
 
     Mock Invoke-RestMethod
     Mock Send-MailKitMessageHC
     Mock New-EventLog
     Mock Write-EventLog
-
-    Mock Invoke-RestMethod -MockWith {
-        @{
-            code   = 'Ok'
-            routes = @(
-                @{
-                    'duration' = 143222.4
-                    'distance' = 1033101.5
-                }
-            )
-        }
-    }
-
 }
 Describe 'the mandatory parameters are' {
     It '<_>' -ForEach @('ConfigurationJsonFile') {
@@ -275,6 +299,85 @@ Describe 'create an error log file when' {
         Should -Invoke Out-File -Times 1 -Exactly -ParameterFilter {
             ($LiteralPath -like '* - System errors log.json') -and
             ($InputObject -like "*Excel file 'TestDrive:\\NotExisting.xslx' not found*")
+        }
+    }
+}
+Describe 'when the script runs successfully' {
+    BeforeAll {
+        Mock Invoke-RestMethod {
+            @{
+                code   = 'Ok'
+                routes = @(
+                    @{
+                        'duration' = 143222.4
+                        'distance' = 1033101.5
+                    }
+                )
+            }
+        } -ParameterFilter {
+            $Uri -eq 'https://router.project-osrm.org/route/v1/driving/1;2'
+        }
+        Mock Invoke-RestMethod {
+            @{
+                code   = 'Ok'
+                routes = @(
+                    @{
+                        'duration' = 6000
+                        'distance' = 55000
+                    }
+                )
+            }
+        } -ParameterFilter {
+            $Uri -eq 'https://router.project-osrm.org/route/v1/driving/3;4'
+        }
+    
+        $testInputFile | ConvertTo-Json -Depth 7 |
+        Out-File @testOutParams
+
+        .$testScript @testParams
+    }
+    Context 'create a log file' {
+        BeforeAll {
+            $actual = Test-GetLogFileDataHC -FileNameRegex '* - Log.json'
+        }
+        It 'in the log folder' {
+            $actual | Should -Not -BeNullOrEmpty
+        }
+        It 'with the correct total rows' {
+            $actual | Should -HaveCount $testExportedLogFileData.Count
+        }
+        It 'with the correct data in the rows' {
+            foreach ($testRow in $testExportedLogFileData) {
+                $actualRow = $actual | Where-Object {
+                    $_.startCoordinate -eq $testRow.startCoordinate
+                }
+                $actualRow.destinationCoordinate | 
+                Should -Be $testRow.destinationCoordinate
+                $actualRow.distanceInMeters |
+                Should -Be $testRow.distanceInMeters
+                $actualRow.durationInSeconds | 
+                Should -Be $testRow.durationInSeconds
+                $actualRow.error | Should -Be $testRow.error
+                $actualRow.dateTime.ToString('yyyyMMdd') |
+                Should -Be $testRow.dateTime.ToString('yyyyMMdd')
+            }
+        }
+    } -Tag test
+    Context 'send an e-mail' {
+        It 'with attachment to the user' {
+            Should -Invoke Send-MailKitMessageHC -Exactly 1 -Scope Describe -ParameterFilter {
+                ($From -eq 'm@example.com') -and
+                ($To -eq '007@example.com') -and
+                ($SmtpPort -eq 25) -and
+                ($SmtpServerName -eq 'SMTP_SERVER') -and
+                ($SmtpConnectionType -eq 'StartTls') -and
+                ($Subject -eq '2 moved, Email subject') -and
+                ($Credential) -and
+                ($Attachments -like '*- Log.json') -and
+                ($Body -like '*Email body*Summary of SFTP actions*table*App x*<th>sftp:/sftp.server.com</th>*Source*Destination*Result*\a*sftp:/folder/a/*1 moved*sftp:/folder/b/*\b*1 moved*<th>2 moved on PC1</th>*') -and
+                ($MailKitAssemblyPath -eq 'C:\Program Files\PackageManagement\NuGet\Packages\MailKit.4.11.0\lib\net8.0\MailKit.dll') -and
+                ($MimeKitAssemblyPath -eq 'C:\Program Files\PackageManagement\NuGet\Packages\MimeKit.4.11.0\lib\net8.0\MimeKit.dll')
+            }
         }
     }
 }
