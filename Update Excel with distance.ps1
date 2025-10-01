@@ -1207,12 +1207,38 @@ end {
                         PartialPath    = "$baseLogName - Log"
                         FileExtensions = $logFileExtensions
                     }
+                    
                     if ($isLog.allActions) {
                         $params.DataToExport = $logFileData
-                        $allLogFilePaths += Out-LogFileHC @params
+                        
                     }
                     elseif ($isLog.onlyActionErrors -and $logFileDataErrors) {
                         $params.DataToExport = $logFileDataErrors
+                    }
+
+                    if ($params.DataToExport) {
+                        $params.DataToExport = $params.DataToExport | 
+                        Select-Object -Property @{
+                            Name       = 'startCoordinate'
+                            Expression = { $_.coordinate.start } 
+                        },
+                        @{
+                            Name       = 'destinationCoordinate'
+                            Expression = { $_.coordinate.destination } 
+                        },
+                        @{
+                            Name       = 'distanceInMeters' 
+                            Expression = { $_.apiResponse.routes[0].distance }
+                        },
+                        @{
+                            Name       = 'durationInSeconds' 
+                            Expression = { $_.apiResponse.routes[0].duration }
+                        },
+                        @{
+                            Name       = 'error' 
+                            Expression = { $_.errors -join ', ' } 
+                        }
+
                         $allLogFilePaths += Out-LogFileHC @params
                     }
                 }

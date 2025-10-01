@@ -146,6 +146,19 @@ BeforeAll {
     Mock Send-MailKitMessageHC
     Mock New-EventLog
     Mock Write-EventLog
+
+    Mock Invoke-RestMethod -MockWith {
+        @{
+            code   = 'Ok'
+            routes = @(
+                @{
+                    'duration' = 143222.4
+                    'distance' = 1033101.5
+                }
+            )
+        }
+    }
+
 }
 Describe 'the mandatory parameters are' {
     It '<_>' -ForEach @('ConfigurationJsonFile') {
