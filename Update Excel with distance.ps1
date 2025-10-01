@@ -1416,7 +1416,7 @@ end {
 
                 $mailParams = @{
                     From                = Get-StringValueHC $sendMail.From
-                    Subject             = '{0} action{1}' -f
+                    Subject             = '{0} trip{1}' -f
                     $logFileData.Count,
                     $(if ($logFileData.Count -ne 1) { 's' })
                     SmtpServerName      = Get-StringValueHC $sendMail.Smtp.ServerName
