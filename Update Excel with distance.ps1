@@ -161,8 +161,15 @@ process {
             [String]$Message
         )
 
+        $eventLogData.Add(
+            [PSCustomObject]@{
+                DateTime  = Get-Date
+                Message   = $Message
+                EntryType = 'Information'
+                EventID   = '4'
+            }
+        )
         Write-Verbose $Message
-        $result.EventLogMessages += $Message
     }
 
     $results = @()
@@ -170,16 +177,15 @@ process {
     foreach ($excelFile in $excelFiles) {
         try {
             $result = @{
-                File             = $excelFile
-                EventLogMessages = @()
-                CoordinatePairs  = @()
-                Error            = $null
+                File            = $excelFile
+                CoordinatePairs = @()
+                Errors          = @()
             }
 
             #region Open and get Excel sheet data
             try {
                 #region Open Excel file
-                Add-EventLogMessageHC "Open Excel file '$excelFile'"
+                Add-EventLogMessageHC "Excel file '$excelFile': Open file"
                 
                 $excelPackage = Open-ExcelPackage -Path $excelFile.FullName
 
@@ -189,7 +195,7 @@ process {
                 #endregion
 
                 #region Get sheet data
-                Add-EventLogMessageHC "Get data in worksheet '$WorksheetName'"
+                Add-EventLogMessageHC "Excel file '$excelFile': Get data in worksheet '$WorksheetName'"
 
                 $sheet = $excelPackage.Workbook.Worksheets[$WorksheetName]
 
@@ -204,7 +210,7 @@ process {
             #endregion
 
             #region Get coordinates from sheet
-            Add-EventLogMessageHC 'Get data from Excel sheet'
+            Add-EventLogMessageHC "Excel file '$excelFile': Get coordinates"
 
             $startCoordinate = $null
 
@@ -276,12 +282,12 @@ process {
                 #endregion
             }
 
-            Add-EventLogMessageHC "Found $($result.CoordinatePairs.Count) start and destination pairs"
+            Add-EventLogMessageHC "Excel file '$excelFile': Found $($result.CoordinatePairs.Count) start and destination pairs"
             #endregion
 
             #region Get distance and duration from OSRM API
             if ($result.CoordinatePairs) {
-                Add-EventLogMessageHC "Get distance and duration from OSRM API for $($result.CoordinatePairs.Count) coordinate pairs"
+                Add-EventLogMessageHC "Excel file '$excelFile': Get distance and duration from OSRM API for $($result.CoordinatePairs.Count) coordinate pairs"
             }
 
             $i = 0
@@ -314,7 +320,7 @@ process {
             )
 
             if ($coordinatePairsWithoutErrors) {
-                Add-EventLogMessageHC "Update Excel sheet '$WorksheetName'"
+                Add-EventLogMessageHC "Excel file '$excelFile': Update Excel sheet '$WorksheetName'"
             }
 
             foreach (
@@ -359,6 +365,8 @@ process {
             #region Move Excel file to archive folder
             if ($ArchiveFolderPath) {
                 try {
+                    Add-EventLogMessageHC "Excel file '$excelFile': Move Excel file to archive folder '$ArchiveFolderPath'"
+                
                     $params = @{
                         LiteralPath = $excelFile.FullName
                         Destination = $ArchiveFolderPath
@@ -372,14 +380,44 @@ process {
             #endregion
         }
         catch {
-            Write-Warning "Failed processing file '$excelFile': $_"
-            $result.Error = $_
+            $M = "Failed processing file: $_"
+            
+            $eventLogData.Add(
+                [PSCustomObject]@{
+                    DateTime  = Get-Date
+                    Error     = "Excel file '$excelFile': $M"
+                    EntryType = 'Error'
+                    EventID   = '2'
+                }
+            )
+
+            Write-Warning $eventLogData[-1].Error
+
+            $result.Errors += $_
         }
         finally {
             if ($excelPackage) {
-                Add-EventLogMessageHC 'Save updates in Excel and close file'
+                try {
+                    Add-EventLogMessageHC "Excel file '$excelFile': Save updates in Excel and close file"
+    
+                    Close-ExcelPackage -ExcelPackage $excelPackage
+                }
+                catch {
+                    $M = "Failed to save updates in Excel file: $_"
 
-                Close-ExcelPackage -ExcelPackage $excelPackage -EA Ignore
+                    $eventLogData.Add(
+                        [PSCustomObject]@{
+                            DateTime  = Get-Date
+                            Error     = "Excel file '$excelFile': $M"
+                            EntryType = 'Error'
+                            EventID   = '2'
+                        }
+                    )
+                    
+                    Write-Warning $eventLogData[-1].Error
+
+                    $result.Errors += $_
+                }
             }
 
             $results += $result

@@ -364,7 +364,7 @@ Describe 'when the script runs successfully' {
     }
     It 'create archive folder' {
         $testInputFile.DropFolder.ArchivePath | Should -Exist
-    } -Tag test
+    }
     Context 'create a log file' {
         BeforeAll {
             $actual = Test-GetLogFileDataHC -FileNameRegex '* - Log.json'
@@ -391,7 +391,7 @@ Describe 'when the script runs successfully' {
                 Should -Be $testRow.dateTime.ToString('yyyyMMdd')
             }
         }
-    }
+    } -Tag test
     Context 'send an e-mail' {
         It 'with attachment to the user' {
             Should -Invoke Send-MailKitMessageHC -Exactly 1 -Scope Describe -ParameterFilter {
