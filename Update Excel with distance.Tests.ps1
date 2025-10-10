@@ -374,7 +374,7 @@ Describe 'when the script runs successfully' {
         }
         It 'with the correct total rows' {
             $actual | Should -HaveCount $testExportedLogFileData.Count
-        }
+        } -Tag test
         It 'with the correct data in the rows' {
             foreach ($testRow in $testExportedLogFileData) {
                 $actualRow = $actual | Where-Object {
@@ -391,7 +391,7 @@ Describe 'when the script runs successfully' {
                 Should -Be $testRow.dateTime.ToString('yyyyMMdd')
             }
         }
-    } -Tag test
+    }
     Context 'send an e-mail' {
         It 'with attachment to the user' {
             Should -Invoke Send-MailKitMessageHC -Exactly 1 -Scope Describe -ParameterFilter {

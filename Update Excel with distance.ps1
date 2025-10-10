@@ -1298,7 +1298,6 @@ end {
 
                         if ($isLog.allActions) {
                             $params.DataToExport = $logFileData
-
                         }
                         elseif ($isLog.onlyActionErrors -and $logFileDataErrors) {
                             $params.DataToExport = $logFileDataErrors
