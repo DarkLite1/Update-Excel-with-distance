@@ -1,6 +1,6 @@
 #Requires -Version 7
 
-<# 
+<#
     .SYNOPSIS
         Update Excel file with distance and travel time between 2 coordinates.
 
@@ -8,7 +8,7 @@
         This script reads an Excel file to find the source and destination
         coordinates. It sends a request to the Open Street Maps API to
         gather the travel time and distance and updates the Excel file.
-    
+
     .PARAMETER ConfigurationJsonFile
         Contains all the parameters used by the script.
         See 'Example.json' for a detailed explanation of parameters.
@@ -52,7 +52,7 @@ begin {
 
         #region Test .json file properties
         @(
-            'Excel'
+            'Excel', 'DropFolder'
         ).where(
             { -not $jsonFileContent.$_ }
         ).foreach(
@@ -60,7 +60,15 @@ begin {
         )
 
         @(
-            'FilePath', 'WorksheetName', 'Column'
+            'Path'
+        ).where(
+            { -not $jsonFileContent.DropFolder.$_ }
+        ).foreach(
+            { throw "Property 'DropFolder.$_' not found" }
+        )
+
+        @(
+            'WorksheetName', 'Column'
         ).where(
             { -not $jsonFileContent.Excel.$_ }
         ).foreach(
@@ -74,12 +82,6 @@ begin {
         ).foreach(
             { throw "Property 'Excel.Column.$_' not found" }
         )
-
-        $ExcelFilePath = $jsonFileContent.Excel.FilePath
-
-        if (-not (Test-Path -LiteralPath $ExcelFilePath -PathType Leaf)) {
-            throw "Excel file '$ExcelFilePath' not found"
-        }
         #endregion
 
         $WorksheetName = $jsonFileContent.Excel.WorksheetName
@@ -87,45 +89,56 @@ begin {
         $CoordinateColumn = $jsonFileContent.Excel.Column.coordinate
         $DistanceColumn = $jsonFileContent.Excel.Column.distance
         $DurationColumn = $jsonFileContent.Excel.Column.duration
-        
-        try {
-            #region Open Excel worksheet
+
+        $DropFolderPath = $jsonFileContent.DropFolder.Path
+        $ArchiveFolderPath = $jsonFileContent.DropFolder.ArchivePath
+
+        #region Test drop folder exists
+        if (-not (Test-Path -LiteralPath $DropFolderPath -PathType Container)) {
+            throw "DropFolder.Path '$DropFolderPath' not found"
+        }
+        #endregion
+
+        #region Create archive folder
+        if (
+            $ArchiveFolderPath -and
+            (-not (Test-Path -LiteralPath $ArchiveFolderPath -PathType Container))
+        ) {
+            try {
+                Write-Verbose "Create archive folder '$ArchiveFolderPath'"
+                $null = New-Item -Path $ArchiveFolderPath -ItemType Directory
+            }
+            catch {
+                throw "Failed creating archive folder '$ArchiveFolderPath': $_"
+            }
+        }
+        #endregion
+
+        #region Get .xlsx files in drop folder
+        $excelFiles = Get-ChildItem -Path $DropFolderPath -Filter '*.xlsx' -File
+
+        if (-not $excelFiles) {
             $eventLogData.Add(
                 [PSCustomObject]@{
-                    Message   = "Open Excel file '$ExcelFilePath'"
+                    Message   = "No Excel files found in drop folder '$DropFolderPath'"
                     EntryType = 'Information'
                     EventID   = '4'
                 }
             )
             Write-Verbose $eventLogData[-1].Message
 
-            $excelPackage = Open-ExcelPackage -Path $ExcelFilePath
-
-            if (-not $excelPackage) {
-                throw "Excel file '$ExcelFilePath' not found"
-            }
-            #endregion
-
-            #region Get sheet data
-            $eventLogData.Add(
-                [PSCustomObject]@{
-                    Message   = "Get data in worksheet '$WorksheetName'"
-                    EntryType = 'Information'
-                    EventID   = '4'
-                }
-            )
-            Write-Verbose $eventLogData[-1].Message
-
-            $sheet = $excelPackage.Workbook.Worksheets[$WorksheetName]
-
-            if (-not $sheet) {
-                throw "Sheet name '$WorksheetName' not found"
-            }
-            #endregion
+            return
         }
-        catch {
-            throw "Failed to open Excel file '$ExcelFilePath': $_"
-        }
+
+        $eventLogData.Add(
+            [PSCustomObject]@{
+                Message   = "Found $($excelFiles.Count) Excel file(s) to process in '$DropFolderPath'"
+                EntryType = 'Information'
+                EventID   = '4'
+            }
+        )
+        Write-Verbose $eventLogData[-1].Message
+        #endregion
     }
     catch {
         $systemErrors += [PSCustomObject]@{
@@ -142,70 +155,108 @@ begin {
 process {
     if ($systemErrors) { return }
 
-    try {
-        #region Get data from Excel sheet
-        $eventLogData.Add(
-            [PSCustomObject]@{
-                Message   = 'Get data from Excel sheet'
-                EntryType = 'Information'
-                EventID   = '4'
-            }
+    function Add-EventLogMessageHC {
+        param (
+            [Parameter(Mandatory)]
+            [String]$Message
         )
 
-        Write-Verbose $eventLogData[-1].Message
+        Write-Verbose $Message
+        $result.EventLogMessages += $Message
+    }
 
-        $startCoordinate = $null
-        
-        foreach (
-            $row in
-            $sheet.Cells | Group-Object -Property { $_.Start.Row }
-        ) {
-            $rowNumber = $row.Name
+    $results = @()
 
-            $rowCells = $row.Group
-
-            #region Create cell addresses
-            $cellAddress = @{
-                startDestination = '{0}{1}' -f $StartDestinationColumn, $rowNumber
-                coordinate       = '{0}{1}' -f $CoordinateColumn, $rowNumber
-                distance         = '{0}{1}' -f $DistanceColumn, $rowNumber
-                duration         = '{0}{1}' -f $DurationColumn, $rowNumber
+    foreach ($excelFile in $excelFiles) {
+        try {
+            $result = @{
+                File             = $excelFile
+                EventLogMessages = @()
+                CoordinatePairs  = @()
+                Error            = $null
             }
-            #endregion
 
-            #region Test if row is a start or destination row
-            $isStartCoordinateRow = $rowCells.Where(
-                {
-                    ($_.Start.Address -eq $cellAddress.startDestination) -and
-                    ($_.Value -eq 'S') 
-                }
-            )
-
-            $isDestinationCoordinateRow = $rowCells.Where(
-                {
-                    ($_.Start.Address -eq $cellAddress.startDestination) -and
-                    ($_.Value -eq 'D') 
-                }
-            )
-            #endregion
-
-            #region Get coordinate
-            $coordinate = (
-                $rowCells.Where(
-                    { ($_.Start.Address -eq $cellAddress.coordinate) }
-                )
-            ).Value
-
-            if ($isStartCoordinateRow) {
-                Write-Verbose "Row '$rowNumber' start coordinate '$coordinate'"
+            #region Open and get Excel sheet data
+            try {
+                #region Open Excel file
+                Add-EventLogMessageHC "Open Excel file '$excelFile'"
                 
-                $startCoordinate = $coordinate
-            }
-            elseif ($isDestinationCoordinateRow -and $startCoordinate) {
-                Write-Verbose "Row '$rowNumber' destination coordinate '$coordinate'"
+                $excelPackage = Open-ExcelPackage -Path $excelFile.FullName
 
-                $logFileData.Add(
-                    @{
+                if (-not $excelPackage) {
+                    throw "Excel file '$excelFile' not found"
+                }
+                #endregion
+
+                #region Get sheet data
+                Add-EventLogMessageHC "Get data in worksheet '$WorksheetName'"
+
+                $sheet = $excelPackage.Workbook.Worksheets[$WorksheetName]
+
+                if (-not $sheet) {
+                    throw "Sheet name '$WorksheetName' not found"
+                }
+                #endregion
+            }
+            catch {
+                throw "Failed to open Excel file '$excelFile': $_"
+            }
+            #endregion
+
+            #region Get coordinates from sheet
+            Add-EventLogMessageHC 'Get data from Excel sheet'
+
+            $startCoordinate = $null
+
+            foreach (
+                $row in
+                $sheet.Cells | Group-Object -Property { $_.Start.Row }
+            ) {
+                $rowNumber = $row.Name
+
+                $rowCells = $row.Group
+
+                #region Create cell addresses
+                $cellAddress = @{
+                    startDestination = '{0}{1}' -f $StartDestinationColumn, $rowNumber
+                    coordinate       = '{0}{1}' -f $CoordinateColumn, $rowNumber
+                    distance         = '{0}{1}' -f $DistanceColumn, $rowNumber
+                    duration         = '{0}{1}' -f $DurationColumn, $rowNumber
+                }
+                #endregion
+
+                #region Test if row is a start or destination row
+                $isStartCoordinateRow = $rowCells.Where(
+                    {
+                        ($_.Start.Address -eq $cellAddress.startDestination) -and
+                        ($_.Value -eq 'S')
+                    }
+                )
+
+                $isDestinationCoordinateRow = $rowCells.Where(
+                    {
+                        ($_.Start.Address -eq $cellAddress.startDestination) -and
+                        ($_.Value -eq 'D')
+                    }
+                )
+                #endregion
+
+                #region Get coordinate
+                $coordinate = (
+                    $rowCells.Where(
+                        { ($_.Start.Address -eq $cellAddress.coordinate) }
+                    )
+                ).Value
+
+                if ($isStartCoordinateRow) {
+                    Write-Verbose "Row '$rowNumber' start coordinate '$coordinate'"
+
+                    $startCoordinate = $coordinate
+                }
+                elseif ($isDestinationCoordinateRow -and $startCoordinate) {
+                    Write-Verbose "Row '$rowNumber' destination coordinate '$coordinate'"
+
+                    $result.CoordinatePairs += @{
                         dateTime    = Get-Date
                         coordinate  = @{
                             start       = $startCoordinate
@@ -218,136 +269,120 @@ process {
                         apiResponse = $null
                         errors      = @()
                     }
-                )
+                }
+                else {
+                    Write-Verbose "Row '$rowNumber' ignored, not a start or destination row"
+                }
+                #endregion
             }
-            else {
-                Write-Verbose "Row '$rowNumber' ignored, not a start or destination row"
+
+            Add-EventLogMessageHC "Found $($result.CoordinatePairs.Count) start and destination pairs"
+            #endregion
+
+            #region Get distance and duration from OSRM API
+            if ($result.CoordinatePairs) {
+                Add-EventLogMessageHC "Get distance and duration from OSRM API for $($result.CoordinatePairs.Count) coordinate pairs"
+            }
+
+            $i = 0
+
+            foreach ($pair in $result.CoordinatePairs) {
+                try {
+                    $i++
+
+                    $params = @{
+                        Uri     = (
+                            'https://router.project-osrm.org/route/v1/driving/{0};{1}' -f
+                            $pair.coordinate.start, $pair.coordinate.destination
+                        ) -replace '\s'
+                        Verbose = $false
+                    }
+                    
+                    Write-Verbose "$i/$($result.CoordinatePairs.Count): call API endpoint '$($params.Uri)'"
+
+                    $pair.apiResponse = Invoke-RestMethod @params
+                }
+                catch {
+                    $pair.errors += "Failed API request: $_"
+                }
+            }
+            #endregion
+
+            #region Update Excel sheet
+            $coordinatePairsWithoutErrors = $result.CoordinatePairs.Where(
+                { -not $_.errors }
+            )
+
+            if ($coordinatePairsWithoutErrors) {
+                Add-EventLogMessageHC "Update Excel sheet '$WorksheetName'"
+            }
+
+            foreach (
+                $pair in $coordinatePairsWithoutErrors
+            ) {
+                #region Set distance
+                try {
+                    $distanceCell = $pair.cellAddress.distance
+                    $distanceValue = $pair.apiResponse.routes[0].distance
+
+                    Write-Verbose "Set distance in cell '$distanceCell' value '$distanceValue'"
+
+                    # distance is returned in meters, we need km
+                    $sheet.Cells[$distanceCell].Value = $distanceValue / 1000
+
+                    $sheet.Cells[$distanceCell].Style.NumberFormat.Format = '0.00 \ \k\m'
+                }
+                catch {
+                    $pair.errors += "Failed to set distance in cell '$distanceCell' with value '$distanceValue': $_"
+                }
+                #endregion
+
+                #region Set duration
+                try {
+                    $durationCell = $pair.cellAddress.duration
+                    $durationValue = $pair.apiResponse.routes[0].duration
+
+                    Write-Verbose "Set duration in cell '$durationCell' value '$durationValue'"
+
+                    # duration is returned in seconds, we need minutes
+                    $sheet.Cells[$durationCell].Value = $durationValue / 60
+
+                    $sheet.Cells[$durationCell].Style.NumberFormat.Format = '0\ \m\i\n'
+                }
+                catch {
+                    $pair.errors += "Failed to set duration in cell '$durationCell' with value '$durationValue': $_"
+                }
+                #endregion
+            }
+            #endregion
+
+            #region Move Excel file to archive folder
+            if ($ArchiveFolderPath) {
+                try {
+                    $params = @{
+                        LiteralPath = $excelFile.FullName
+                        Destination = $ArchiveFolderPath
+                    }
+                    Move-Item @params
+                }
+                catch {
+                    throw "Failed to move file from '$($params.LiteralPath)' to '$($params.Destination)': $_"
+                }
             }
             #endregion
         }
-
-        $eventLogData.Add(
-            [PSCustomObject]@{
-                Message   = "Found $($logFileData.Count) start and destination pairs"
-                EntryType = 'Information'
-                EventID   = '4'
-            }
-        )
-
-        Write-Verbose $eventLogData[-1].Message
-        #endregion
-        
-        #region Get distance and duration from OSRM API
-        if ($logFileData) {
-            $eventLogData.Add(
-                [PSCustomObject]@{
-                    Message   = "Get distance and duration from OSRM API for $($logFileData.Count) coordinate pairs"
-                    EntryType = 'Information'
-                    EventID   = '4'
-                }
-            )
-
-            Write-Verbose $eventLogData[-1].Message
+        catch {
+            Write-Warning "Failed processing file '$excelFile': $_"
+            $result.Error = $_
         }
+        finally {
+            if ($excelPackage) {
+                Add-EventLogMessageHC 'Save updates in Excel and close file'
 
-        $i = 0
-
-        foreach ($pair in $logFileData) {
-            try {
-                $params = @{
-                    Uri     = (
-                        'https://router.project-osrm.org/route/v1/driving/{0};{1}' -f
-                        $pair.coordinate.start, $pair.coordinate.destination
-                    ) -replace '\s'
-                    Verbose = $false
-                }
-
-                $i++
-                Write-Verbose "$i/$($logFileData.Count): call API endpoint '$($params.Uri)'"
-
-                $pair.apiResponse = Invoke-RestMethod @params
+                Close-ExcelPackage -ExcelPackage $excelPackage -EA Ignore
             }
-            catch {
-                $pair.errors += "Failed API request: $_"
-            }
-        }
-        #endregion
 
-        #region Update Excel sheet
-        if ($logFileData.Where({ -not $_.errors })) {
-            $eventLogData.Add(
-                [PSCustomObject]@{
-                    Message   = "Update Excel sheet '$WorksheetName'"
-                    EntryType = 'Information'
-                    EventID   = '4'
-                }
-            )
-                
-            Write-Verbose $eventLogData[-1].Message
-        }
-
-        foreach (
-            $pair in $logFileData.Where({ -not $_.errors })
-        ) {
-            #region Set distance
-            try {
-                $distanceCell = $pair.cellAddress.distance
-                $distanceValue = $pair.apiResponse.routes[0].distance
-
-                Write-Verbose "Set distance in cell '$distanceCell' value '$distanceValue'"
-
-                # distance is returned in meters, we need km
-                $sheet.Cells[$distanceCell].Value = $distanceValue / 1000
-
-                $sheet.Cells[$distanceCell].Style.NumberFormat.Format = '0.00 \ \k\m'
-            }
-            catch {
-                $pair.errors += "Failed to set distance in cell '$distanceCell' with value '$distanceValue': $_"
-            }
-            #endregion
-            
-            #region Set duration
-            try {
-                $durationCell = $pair.cellAddress.duration
-                $durationValue = $pair.apiResponse.routes[0].duration
-
-                Write-Verbose "Set duration in cell '$durationCell' value '$durationValue'"
-
-                # duration is returned in seconds, we need minutes
-                $sheet.Cells[$durationCell].Value = $durationValue / 60
-
-                $sheet.Cells[$durationCell].Style.NumberFormat.Format = '0\ \m\i\n'
-            }
-            catch {
-                $pair.errors += "Failed to set duration in cell '$durationCell' with value '$durationValue': $_"
-            }
-            #endregion
-        }
-        #endregion
-    }
-    catch {
-        $systemErrors += [PSCustomObject]@{
-            DateTime = Get-Date
-            Message  = $_
-        }
-
-        Write-Warning $systemErrors[-1].Message
-
-        return
-    }
-    finally {
-        if ($excelPackage) {
-            $eventLogData.Add(
-                [PSCustomObject]@{
-                    Message   = 'Save updates in Excel and close file'
-                    EntryType = 'Information'
-                    EventID   = '4'
-                }
-            )
-
-            Write-Verbose $eventLogData[-1].Message
-        
-            Close-ExcelPackage -ExcelPackage $excelPackage -EA Ignore
+            $results += $result
         }
     }
 }
@@ -462,7 +497,7 @@ end {
                         }
 
                         $excelParams = @{
-                            Path          = $logFilePath
+                            LiteralPath   = $logFilePath
                             Append        = $true
                             AutoNameRange = $true
                             AutoSize      = $true
@@ -496,19 +531,19 @@ end {
     function Get-LogFolderHC {
         <#
         .SYNOPSIS
-            Ensures that a specified path exists, creating it if it doesn't.
+            Ensures that a specified LiteralPath exists, creating it if it doesn't.
             Supports absolute paths and paths relative to $PSScriptRoot. Returns
-            the full path of the folder.
+            the full LiteralPath of the folder.
 
         .DESCRIPTION
-            This function takes a path as input and checks if it exists. If
-            the path does not exist, it attempts to create the folder. It
+            This function takes a LiteralPath as input and checks if it exists. If
+            the LiteralPath does not exist, it attempts to create the folder. It
             handles both absolute paths and paths relative to the location of
             the currently running script ($PSScriptRoot).
 
-        .PARAMETER Path
-            The path to ensure exists. This can be an absolute path (ex.
-            C:\MyFolder\SubFolder) or a path relative to the script's
+        .PARAMETER LiteralPath
+            The LiteralPath to ensure exists. This can be an absolute LiteralPath (ex.
+            C:\MyFolder\SubFolder) or a LiteralPath relative to the script's
             directory (ex. Data\Logs).
 
         .EXAMPLE
@@ -565,10 +600,10 @@ end {
                 Install-Package @params -Name 'MimeKit'
 
             .PARAMETER MailKitAssemblyPath
-                The path to the MailKit assembly.
+                The LiteralPath to the MailKit assembly.
 
             .PARAMETER MimeKitAssemblyPath
-                The path to the MimeKit assembly.
+                The LiteralPath to the MimeKit assembly.
 
             .PARAMETER SmtpServerName
                 The name of the SMTP server.
@@ -1223,37 +1258,37 @@ end {
 
                     if ($isLog.allActions) {
                         $params.DataToExport = $logFileData
-                        
+
                     }
                     elseif ($isLog.onlyActionErrors -and $logFileDataErrors) {
                         $params.DataToExport = $logFileDataErrors
                     }
 
                     if ($params.DataToExport) {
-                        $params.DataToExport = $params.DataToExport | 
+                        $params.DataToExport = $params.DataToExport |
                         Select-Object -Property @{
                             Name       = 'dateTime'
-                            Expression = { $_.dateTime } 
+                            Expression = { $_.dateTime }
                         },
                         @{
                             Name       = 'startCoordinate'
-                            Expression = { $_.coordinate.start } 
+                            Expression = { $_.coordinate.start }
                         },
                         @{
                             Name       = 'destinationCoordinate'
-                            Expression = { $_.coordinate.destination } 
+                            Expression = { $_.coordinate.destination }
                         },
                         @{
-                            Name       = 'distanceInMeters' 
+                            Name       = 'distanceInMeters'
                             Expression = { $_.apiResponse.routes[0].distance }
                         },
                         @{
-                            Name       = 'durationInSeconds' 
+                            Name       = 'durationInSeconds'
                             Expression = { $_.apiResponse.routes[0].duration }
                         },
                         @{
-                            Name       = 'error' 
-                            Expression = { $_.errors -join ', ' } 
+                            Name       = 'error'
+                            Expression = { $_.errors -join ', ' }
                         }
 
                         $allLogFilePaths += Out-LogFileHC @params

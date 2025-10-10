@@ -7,8 +7,11 @@ BeforeAll {
     }
 
     $testInputFile = @{
-        Excel    = @{
-            FilePath      = (New-Item 'TestDrive:/file.xlsx' -ItemType File).FullName
+        DropFolder = @{
+            Path        = (New-Item 'TestDrive:/DropFolder' -ItemType Container).FullName
+            ArchivePath = 'TestDrive:/DropFolder/Archive'
+        }
+        Excel      = @{
             WorksheetName = 'sheet1'
             Column        = @{
                 startDestination = 'B'
@@ -17,7 +20,7 @@ BeforeAll {
                 duration         = 'D'
             }
         }
-        Settings = @{
+        Settings   = @{
             ScriptName     = 'Test (Brecht)'
             SendMail       = @{
                 When         = 'Always'
@@ -75,7 +78,9 @@ BeforeAll {
         }
     )
 
-    $testData | Export-Excel -Path $testInputFile.Excel.FilePath
+    $testExcelFile = 'TestDrive:/DropFolder/File.xlsx'
+
+    $testData | Export-Excel -Path $testExcelFile
 
     $testExportedLogFileData = @(
         [PSCustomObject]@{
@@ -222,7 +227,7 @@ Describe 'create an error log file when' {
         }
         Context 'property' {
             It '<_> not found' -ForEach @(
-                'Excel'
+                'Excel', 'DropFolder'
             ) {
                 Mock Out-File
 
@@ -242,8 +247,29 @@ Describe 'create an error log file when' {
                     ($InputObject -like "*Property '$_' not found*")
                 }
             }
+            It 'DropFolder.<_> not found' -ForEach @(
+                'Path'
+            ) {
+                Mock Out-File
+
+                $testNewInputFile = Copy-ObjectHC $testInputFile
+                $testNewInputFile.DropFolder.$_ = $null
+
+                & $realCmdLet.OutFile @testOutParams -InputObject (
+                    $testNewInputFile | ConvertTo-Json -Depth 7
+                )
+
+                .$testScript @testParams
+
+                $LASTEXITCODE | Should -Be 1
+
+                Should -Invoke Out-File -Times 1 -Exactly -ParameterFilter {
+                    ($LiteralPath -like '* - System errors log.json') -and
+                    ($InputObject -like "*Property 'DropFolder.$_' not found*")
+                }
+            }
             It 'Excel.<_> not found' -ForEach @(
-                'FilePath', 'WorksheetName', 'Column'
+                'WorksheetName', 'Column'
             ) {
                 Mock Out-File
 
@@ -282,11 +308,11 @@ Describe 'create an error log file when' {
             }
         }
     }
-    It 'The Excel.FilePath cannot be found' {
+    It 'The DropFolder.Path cannot be found' {
         Mock Out-File
 
         $testNewInputFile = Copy-ObjectHC $testInputFile
-        $testNewInputFile.Excel.FilePath = 'TestDrive:\NotExisting.xslx'
+        $testNewInputFile.DropFolder.Path = 'TestDrive:\notExisting'
 
         & $realCmdLet.OutFile @testOutParams -InputObject (
             $testNewInputFile | ConvertTo-Json -Depth 7
@@ -298,7 +324,7 @@ Describe 'create an error log file when' {
 
         Should -Invoke Out-File -Times 1 -Exactly -ParameterFilter {
             ($LiteralPath -like '* - System errors log.json') -and
-            ($InputObject -like "*Excel file 'TestDrive:\\NotExisting.xslx' not found*")
+            ($InputObject -like "*DropFolder.Path 'TestDrive:\\NotExisting' not found*")
         }
     }
 }
@@ -336,6 +362,9 @@ Describe 'when the script runs successfully' {
 
         .$testScript @testParams
     }
+    It 'create archive folder' {
+        $testInputFile.DropFolder.ArchivePath | Should -Exist
+    } -Tag test
     Context 'create a log file' {
         BeforeAll {
             $actual = Test-GetLogFileDataHC -FileNameRegex '* - Log.json'

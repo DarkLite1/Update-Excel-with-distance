@@ -1,6 +1,9 @@
 {
+  "DropFolder": {
+    "Path": "C:\\Folder",
+    "ArchivePath": "C:\\Folder\\Archive"
+  },
   "Excel": {
-    "FilePath": "C:\\Distance tracker.xlsx",
     "WorksheetName": "Distances",
     "Column": {
       "startDestination": "F",
@@ -49,8 +52,11 @@
     }
   },
   "?": {
+    "DropFolder": {
+      "Path": "(Mandatory) The path to the folder containing the Excel files.",
+      "ArchivePath": "(Optional) The path to the folder where processed files will be moved. If not specified or NULL, files will not be moved."
+    },
     "Excel": {
-      "FilePath": "(Mandatory) The path to the Excel file.",
       "WorksheetName": "(Mandatory) The name of the worksheet in the Excel file that contains the coordinates.",
       "Column": {
         "startDestination": "(Mandatory) The column containing the letter 'S' for source or 'D' for destination.",
