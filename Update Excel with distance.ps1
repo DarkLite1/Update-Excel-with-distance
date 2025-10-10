@@ -1245,11 +1245,6 @@ end {
         $sendMail = $settings.SendMail
         $saveLogFiles = $settings.SaveLogFiles
 
-        $allLogFilePaths = @()
-        $logFileDataErrors = $logFileData.Where({ $_.errors })
-        $baseLogName = $null
-        $logFolderPath = $null
-
         #region Get script name
         if (-not $scriptName) {
             Write-Warning "No 'Settings.ScriptName' found in import file."
@@ -1257,248 +1252,255 @@ end {
         }
         #endregion
 
-        #region Create log files
-        try {
-            $logFolder = Get-StringValueHC $saveLogFiles.Where.Folder
-
-            $logFileExtensions = $saveLogFiles.Where.FileExtensions
-            $isLog = @{
-                systemErrors     = $saveLogFiles.What.SystemErrors
-                allActions       = $saveLogFiles.What.AllActions
-                onlyActionErrors = $saveLogFiles.What.OnlyActionErrors
-            }
-
-            if ($logFolder -and $logFileExtensions) {
-                #region Get log folder
-                try {
-                    $logFolderPath = Get-LogFolderHC -Path $logFolder
-
-                    Write-Verbose "Log folder '$logFolderPath'"
-
-                    $baseLogName = Join-Path -Path $logFolderPath -ChildPath (
-                        '{0} - {1} ({2})' -f
-                        $scriptStartTime.ToString('yyyy_MM_dd_HHmmss_dddd'),
-                        $ScriptName,
-                        $jsonFileItem.BaseName
-                    )
-                }
-                catch {
-                    throw "Failed creating log folder '$LogFolder': $_"
-                }
-                #endregion
-
-                #region Create log file
-                if ($logFileData) {
-                    $params = @{
-                        PartialPath    = "$baseLogName - Log"
-                        FileExtensions = $logFileExtensions
-                    }
-
-                    if ($isLog.allActions) {
-                        $params.DataToExport = $logFileData
-
-                    }
-                    elseif ($isLog.onlyActionErrors -and $logFileDataErrors) {
-                        $params.DataToExport = $logFileDataErrors
-                    }
-
-                    if ($params.DataToExport) {
-                        $params.DataToExport = $params.DataToExport |
-                        Select-Object -Property @{
-                            Name       = 'dateTime'
-                            Expression = { $_.dateTime }
-                        },
-                        @{
-                            Name       = 'startCoordinate'
-                            Expression = { $_.coordinate.start }
-                        },
-                        @{
-                            Name       = 'destinationCoordinate'
-                            Expression = { $_.coordinate.destination }
-                        },
-                        @{
-                            Name       = 'distanceInMeters'
-                            Expression = { $_.apiResponse.routes[0].distance }
-                        },
-                        @{
-                            Name       = 'durationInSeconds'
-                            Expression = { $_.apiResponse.routes[0].duration }
-                        },
-                        @{
-                            Name       = 'error'
-                            Expression = { $_.errors -join ', ' }
-                        }
-
-                        $allLogFilePaths += Out-LogFileHC @params
-                    }
-                }
-
-                if ($isLog.SystemErrors -and $systemErrors) {
-                    $params = @{
-                        DataToExport   = $systemErrors
-                        PartialPath    = "$baseLogName - System errors log"
-                        FileExtensions = $logFileExtensions
-                    }
-                    $allLogFilePaths += Out-LogFileHC @params
-                }
-                #endregion
-            }
+        $logFileExtensions = $saveLogFiles.Where.FileExtensions
+        $isLog = @{
+            systemErrors     = $saveLogFiles.What.SystemErrors
+            allActions       = $saveLogFiles.What.AllActions
+            onlyActionErrors = $saveLogFiles.What.OnlyActionErrors
         }
-        catch {
-            $systemErrors += [PSCustomObject]@{
-                DateTime = Get-Date
-                Message  = "Failed creating log file in folder '$($saveLogFiles.Where.Folder)': $_"
-            }
 
-            Write-Warning $systemErrors[-1].Message
-        }
-        #endregion
+        foreach ($logFileData in $results) {
+            $allLogFilePaths = @()
+            $logFileDataErrors = $logFileData.Where({ $_.errors })
+            $baseLogName = $null
+            $logFolderPath = $null
 
-        #region Remove old log files
-        if ($saveLogFiles.DeleteLogsAfterDays -gt 0 -and $logFolderPath) {
-            $cutoffDate = (Get-Date).AddDays(-$saveLogFiles.DeleteLogsAfterDays)
+            #region Create log files
+            try {
+                $logFolder = Get-StringValueHC $saveLogFiles.Where.Folder
+           
+                if ($logFolder -and $logFileExtensions) {
+                    #region Get log folder
+                    try {
+                        $logFolderPath = Get-LogFolderHC -Path $logFolder
 
-            Write-Verbose "Removing log files older than $cutoffDate from '$logFolderPath'"
+                        Write-Verbose "Log folder '$logFolderPath'"
 
-            Get-ChildItem -Path $logFolderPath -File |
-            Where-Object { $_.LastWriteTime -lt $cutoffDate } |
-            ForEach-Object {
-                try {
-                    $fileToRemove = $_
-                    Write-Verbose "Deleting old log file '$_''"
-                    Remove-Item -Path $_.FullName -Force
-                }
-                catch {
-                    $systemErrors += [PSCustomObject]@{
-                        DateTime = Get-Date
-                        Message  = "Failed to remove file '$fileToRemove': $_"
+                        $baseLogName = Join-Path -Path $logFolderPath -ChildPath (
+                            '{0} - {1} ({2}) - {3}' -f
+                            $scriptStartTime.ToString('yyyy_MM_dd_HHmmss'),
+                            $ScriptName,
+                            $jsonFileItem.BaseName,
+                            $logFileData.File.BaseName
+                        )
                     }
+                    catch {
+                        throw "Failed creating log folder '$LogFolder': $_"
+                    }
+                    #endregion
 
-                    Write-Warning $systemErrors[-1].Message
-
-                    if ($baseLogName -and $isLog.systemErrors) {
+                    #region Create log file
+                    if ($logFileData) {
                         $params = @{
-                            DataToExport   = $systemErrors[-1]
-                            PartialPath    = "$baseLogName - Errors"
+                            PartialPath    = "$baseLogName - Log"
                             FileExtensions = $logFileExtensions
                         }
-                        $allLogFilePaths += Out-LogFileHC @params -EA Ignore
+
+                        if ($isLog.allActions) {
+                            $params.DataToExport = $logFileData
+
+                        }
+                        elseif ($isLog.onlyActionErrors -and $logFileDataErrors) {
+                            $params.DataToExport = $logFileDataErrors
+                        }
+
+                        if ($params.DataToExport) {
+                            $params.DataToExport = $params.DataToExport |
+                            Select-Object -Property @{
+                                Name       = 'dateTime'
+                                Expression = { $_.dateTime }
+                            },
+                            @{
+                                Name       = 'startCoordinate'
+                                Expression = { $_.coordinate.start }
+                            },
+                            @{
+                                Name       = 'destinationCoordinate'
+                                Expression = { $_.coordinate.destination }
+                            },
+                            @{
+                                Name       = 'distanceInMeters'
+                                Expression = { $_.apiResponse.routes[0].distance }
+                            },
+                            @{
+                                Name       = 'durationInSeconds'
+                                Expression = { $_.apiResponse.routes[0].duration }
+                            },
+                            @{
+                                Name       = 'error'
+                                Expression = { $_.errors -join ', ' }
+                            }
+
+                            $allLogFilePaths += Out-LogFileHC @params
+                        }
+                    }
+
+                    if ($isLog.SystemErrors -and $systemErrors) {
+                        $params = @{
+                            DataToExport   = $systemErrors
+                            PartialPath    = "$baseLogName - System errors log"
+                            FileExtensions = $logFileExtensions
+                        }
+                        $allLogFilePaths += Out-LogFileHC @params
+                    }
+                    #endregion
+                }
+            }
+            catch {
+                $systemErrors += [PSCustomObject]@{
+                    DateTime = Get-Date
+                    Message  = "Failed creating log file in folder '$($saveLogFiles.Where.Folder)': $_"
+                }
+
+                Write-Warning $systemErrors[-1].Message
+            }
+            #endregion
+
+            #region Remove old log files
+            if ($saveLogFiles.DeleteLogsAfterDays -gt 0 -and $logFolderPath) {
+                $cutoffDate = (Get-Date).AddDays(-$saveLogFiles.DeleteLogsAfterDays)
+
+                Write-Verbose "Removing log files older than $cutoffDate from '$logFolderPath'"
+
+                Get-ChildItem -Path $logFolderPath -File |
+                Where-Object { $_.LastWriteTime -lt $cutoffDate } |
+                ForEach-Object {
+                    try {
+                        $fileToRemove = $_
+                        Write-Verbose "Deleting old log file '$_''"
+                        Remove-Item -Path $_.FullName -Force
+                    }
+                    catch {
+                        $systemErrors += [PSCustomObject]@{
+                            DateTime = Get-Date
+                            Message  = "Failed to remove file '$fileToRemove': $_"
+                        }
+
+                        Write-Warning $systemErrors[-1].Message
+
+                        if ($baseLogName -and $isLog.systemErrors) {
+                            $params = @{
+                                DataToExport   = $systemErrors[-1]
+                                PartialPath    = "$baseLogName - Errors"
+                                FileExtensions = $logFileExtensions
+                            }
+                            $allLogFilePaths += Out-LogFileHC @params -EA Ignore
+                        }
                     }
                 }
             }
-        }
-        #endregion
+            #endregion
 
-        #region Write events to event log
-        try {
-            $saveInEventLog.LogName = Get-StringValueHC $saveInEventLog.LogName
+            #region Write events to event log
+            try {
+                $saveInEventLog.LogName = Get-StringValueHC $saveInEventLog.LogName
 
-            if ($saveInEventLog.Save -and $saveInEventLog.LogName) {
-                $systemErrors | ForEach-Object {
+                if ($saveInEventLog.Save -and $saveInEventLog.LogName) {
+                    $systemErrors | ForEach-Object {
+                        $eventLogData.Add(
+                            [PSCustomObject]@{
+                                DateTime  = $_.DateTime
+                                Error     = $_.Message
+                                EntryType = 'Error'
+                                EventID   = '2'
+                            }
+                        )
+                    }
+
                     $eventLogData.Add(
                         [PSCustomObject]@{
-                            DateTime  = $_.DateTime
-                            Error     = $_.Message
-                            EntryType = 'Error'
-                            EventID   = '2'
+                            Message   = 'Script ended'
+                            EntryType = 'Information'
+                            EventID   = '199'
                         }
                     )
-                }
 
-                $eventLogData.Add(
-                    [PSCustomObject]@{
-                        Message   = 'Script ended'
-                        EntryType = 'Information'
-                        EventID   = '199'
+                    $params = @{
+                        Source  = $scriptName
+                        LogName = $saveInEventLog.LogName
+                        Events  = $eventLogData
                     }
-                )
+                    Write-EventsToEventLogHC @params
 
-                $params = @{
-                    Source  = $scriptName
-                    LogName = $saveInEventLog.LogName
-                    Events  = $eventLogData
                 }
-                Write-EventsToEventLogHC @params
-
-            }
-            elseif ($saveInEventLog.Save -and (-not $saveInEventLog.LogName)) {
-                throw "Both 'Settings.SaveInEventLog.Save' and 'Settings.SaveInEventLog.LogName' are required to save events in the event log."
-            }
-        }
-        catch {
-            $systemErrors += [PSCustomObject]@{
-                DateTime = Get-Date
-                Message  = "Failed writing events to event log: $_"
-            }
-
-            Write-Warning $systemErrors[-1].Message
-
-            if ($baseLogName -and $isLog.systemErrors) {
-                $params = @{
-                    DataToExport   = $systemErrors[-1]
-                    PartialPath    = "$baseLogName - Errors"
-                    FileExtensions = $logFileExtensions
+                elseif ($saveInEventLog.Save -and (-not $saveInEventLog.LogName)) {
+                    throw "Both 'Settings.SaveInEventLog.Save' and 'Settings.SaveInEventLog.LogName' are required to save events in the event log."
                 }
-                $allLogFilePaths += Out-LogFileHC @params -EA Ignore
             }
-        }
-        #endregion
-
-        #region Send email
-        try {
-            $isSendMail = $false
-
-            switch ($sendMail.When) {
-                'Never' {
-                    break
+            catch {
+                $systemErrors += [PSCustomObject]@{
+                    DateTime = Get-Date
+                    Message  = "Failed writing events to event log: $_"
                 }
-                'Always' {
-                    $isSendMail = $true
-                    break
+
+                Write-Warning $systemErrors[-1].Message
+
+                if ($baseLogName -and $isLog.systemErrors) {
+                    $params = @{
+                        DataToExport   = $systemErrors[-1]
+                        PartialPath    = "$baseLogName - Errors"
+                        FileExtensions = $logFileExtensions
+                    }
+                    $allLogFilePaths += Out-LogFileHC @params -EA Ignore
                 }
-                'OnError' {
-                    if ($systemErrors -or $logFileDataErrors) {
+            }
+            #endregion
+
+            #region Send email
+            try {
+                $isSendMail = $false
+
+                switch ($sendMail.When) {
+                    'Never' {
+                        break
+                    }
+                    'Always' {
                         $isSendMail = $true
+                        break
                     }
-                    break
-                }
-                'OnErrorOrAction' {
-                    if ($systemErrors -or $logFileDataErrors -or $logFileData) {
-                        $isSendMail = $true
+                    'OnError' {
+                        if ($systemErrors -or $logFileDataErrors) {
+                            $isSendMail = $true
+                        }
+                        break
                     }
-                    break
-                }
-                default {
-                    throw "SendMail.When '$($sendMail.When)' not supported. Supported values are 'Never', 'Always', 'OnError' or 'OnErrorOrAction'."
-                }
-            }
-
-            if ($isSendMail) {
-                #region Test mandatory fields
-                @{
-                    'From'                 = $sendMail.From
-                    'Smtp.ServerName'      = $sendMail.Smtp.ServerName
-                    'Smtp.Port'            = $sendMail.Smtp.Port
-                    'AssemblyPath.MailKit' = $sendMail.AssemblyPath.MailKit
-                    'AssemblyPath.MimeKit' = $sendMail.AssemblyPath.MimeKit
-                }.GetEnumerator() |
-                Where-Object { -not $_.Value } | ForEach-Object {
-                    throw "Input file property 'Settings.SendMail.$($_.Key)' cannot be blank"
-                }
-                #endregion
-
-                $mailParams = @{
-                    From                = Get-StringValueHC $sendMail.From
-                    Subject             = '{0} trip{1}' -f
-                    $logFileData.Count,
-                    $(if ($logFileData.Count -ne 1) { 's' })
-                    SmtpServerName      = Get-StringValueHC $sendMail.Smtp.ServerName
-                    SmtpPort            = Get-StringValueHC $sendMail.Smtp.Port
-                    MailKitAssemblyPath = Get-StringValueHC $sendMail.AssemblyPath.MailKit
-                    MimeKitAssemblyPath = Get-StringValueHC $sendMail.AssemblyPath.MimeKit
+                    'OnErrorOrAction' {
+                        if ($systemErrors -or $logFileDataErrors -or $logFileData) {
+                            $isSendMail = $true
+                        }
+                        break
+                    }
+                    default {
+                        throw "SendMail.When '$($sendMail.When)' not supported. Supported values are 'Never', 'Always', 'OnError' or 'OnErrorOrAction'."
+                    }
                 }
 
-                $mailParams.Body = @"
+                if ($isSendMail) {
+                    #region Test mandatory fields
+                    @{
+                        'From'                 = $sendMail.From
+                        'Smtp.ServerName'      = $sendMail.Smtp.ServerName
+                        'Smtp.Port'            = $sendMail.Smtp.Port
+                        'AssemblyPath.MailKit' = $sendMail.AssemblyPath.MailKit
+                        'AssemblyPath.MimeKit' = $sendMail.AssemblyPath.MimeKit
+                    }.GetEnumerator() |
+                    Where-Object { -not $_.Value } | ForEach-Object {
+                        throw "Input file property 'Settings.SendMail.$($_.Key)' cannot be blank"
+                    }
+                    #endregion
+
+                    $mailParams = @{
+                        From                = Get-StringValueHC $sendMail.From
+                        Subject             = '{0} trip{1}' -f
+                        $logFileData.Count,
+                        $(if ($logFileData.Count -ne 1) { 's' })
+                        SmtpServerName      = Get-StringValueHC $sendMail.Smtp.ServerName
+                        SmtpPort            = Get-StringValueHC $sendMail.Smtp.Port
+                        MailKitAssemblyPath = Get-StringValueHC $sendMail.AssemblyPath.MailKit
+                        MimeKitAssemblyPath = Get-StringValueHC $sendMail.AssemblyPath.MimeKit
+                    }
+
+                    $mailParams.Body = @"
 <!DOCTYPE html>
 <html>
     <head>
@@ -1642,86 +1644,87 @@ end {
 </html>
 "@
 
-                if ($sendMail.FromDisplayName) {
-                    $mailParams.FromDisplayName = Get-StringValueHC $sendMail.FromDisplayName
-                }
-
-                if ($sendMail.Subject) {
-                    $mailParams.Subject = '{0}, {1}' -f
-                    $mailParams.Subject, $sendMail.Subject
-                }
-
-                if ($sendMail.To) {
-                    $mailParams.To = $sendMail.To
-                }
-
-                if ($sendMail.Bcc) {
-                    $mailParams.Bcc = $sendMail.Bcc
-                }
-
-                if ($systemErrors -or $logFileDataErrors) {
-                    $totalErrorCount = $systemErrors.Count + $logFileDataErrors.Count
-
-                    $mailParams.Priority = 'High'
-                    $mailParams.Subject = '{0} error{1}, {2}' -f
-                    $totalErrorCount,
-                    $(if ($totalErrorCount -ne 1) { 's' }),
-                    $mailParams.Subject
-                }
-
-                if ($allLogFilePaths) {
-                    $mailParams.Attachments = $allLogFilePaths |
-                    Sort-Object -Unique
-                }
-
-                if ($sendMail.Smtp.ConnectionType) {
-                    $mailParams.SmtpConnectionType = Get-StringValueHC $sendMail.Smtp.ConnectionType
-                }
-
-                #region Create SMTP credential
-                $smtpUserName = Get-StringValueHC $sendMail.Smtp.UserName
-                $smtpPassword = Get-StringValueHC $sendMail.Smtp.Password
-
-                if ( $smtpUserName -and $smtpPassword) {
-                    try {
-                        $securePassword = ConvertTo-SecureString -String $smtpPassword -AsPlainText -Force
-
-                        $credential = New-Object System.Management.Automation.PSCredential($smtpUserName, $securePassword)
-
-                        $mailParams.Credential = $credential
+                    if ($sendMail.FromDisplayName) {
+                        $mailParams.FromDisplayName = Get-StringValueHC $sendMail.FromDisplayName
                     }
-                    catch {
-                        throw "Failed to create credential: $_"
+
+                    if ($sendMail.Subject) {
+                        $mailParams.Subject = '{0}, {1}' -f
+                        $mailParams.Subject, $sendMail.Subject
                     }
-                }
-                elseif ($smtpUserName -or $smtpPassword) {
-                    throw "Both 'Settings.SendMail.Smtp.Username' and 'Settings.SendMail.Smtp.Password' are required when authentication is needed."
-                }
-                #endregion
 
-                Write-Verbose "Send email to '$($mailParams.To)' subject '$($mailParams.Subject)'"
+                    if ($sendMail.To) {
+                        $mailParams.To = $sendMail.To
+                    }
 
-                Send-MailKitMessageHC @mailParams
+                    if ($sendMail.Bcc) {
+                        $mailParams.Bcc = $sendMail.Bcc
+                    }
+
+                    if ($systemErrors -or $logFileDataErrors) {
+                        $totalErrorCount = $systemErrors.Count + $logFileDataErrors.Count
+
+                        $mailParams.Priority = 'High'
+                        $mailParams.Subject = '{0} error{1}, {2}' -f
+                        $totalErrorCount,
+                        $(if ($totalErrorCount -ne 1) { 's' }),
+                        $mailParams.Subject
+                    }
+
+                    if ($allLogFilePaths) {
+                        $mailParams.Attachments = $allLogFilePaths |
+                        Sort-Object -Unique
+                    }
+
+                    if ($sendMail.Smtp.ConnectionType) {
+                        $mailParams.SmtpConnectionType = Get-StringValueHC $sendMail.Smtp.ConnectionType
+                    }
+
+                    #region Create SMTP credential
+                    $smtpUserName = Get-StringValueHC $sendMail.Smtp.UserName
+                    $smtpPassword = Get-StringValueHC $sendMail.Smtp.Password
+
+                    if ( $smtpUserName -and $smtpPassword) {
+                        try {
+                            $securePassword = ConvertTo-SecureString -String $smtpPassword -AsPlainText -Force
+
+                            $credential = New-Object System.Management.Automation.PSCredential($smtpUserName, $securePassword)
+
+                            $mailParams.Credential = $credential
+                        }
+                        catch {
+                            throw "Failed to create credential: $_"
+                        }
+                    }
+                    elseif ($smtpUserName -or $smtpPassword) {
+                        throw "Both 'Settings.SendMail.Smtp.Username' and 'Settings.SendMail.Smtp.Password' are required when authentication is needed."
+                    }
+                    #endregion
+
+                    Write-Verbose "Send email to '$($mailParams.To)' subject '$($mailParams.Subject)'"
+
+                    Send-MailKitMessageHC @mailParams
+                }
             }
+            catch {
+                $systemErrors += [PSCustomObject]@{
+                    DateTime = Get-Date
+                    Message  = "Failed sending email: $_"
+                }
+
+                Write-Warning $systemErrors[-1].Message
+
+                if ($baseLogName -and $isLog.systemErrors) {
+                    $params = @{
+                        DataToExport   = $systemErrors[-1]
+                        PartialPath    = "$baseLogName - Errors"
+                        FileExtensions = $logFileExtensions
+                    }
+                    $null = Out-LogFileHC @params -EA Ignore
+                }
+            }
+            #endregion
         }
-        catch {
-            $systemErrors += [PSCustomObject]@{
-                DateTime = Get-Date
-                Message  = "Failed sending email: $_"
-            }
-
-            Write-Warning $systemErrors[-1].Message
-
-            if ($baseLogName -and $isLog.systemErrors) {
-                $params = @{
-                    DataToExport   = $systemErrors[-1]
-                    PartialPath    = "$baseLogName - Errors"
-                    FileExtensions = $logFileExtensions
-                }
-                $null = Out-LogFileHC @params -EA Ignore
-            }
-        }
-        #endregion
     }
     catch {
         $systemErrors += [PSCustomObject]@{
