@@ -179,7 +179,6 @@ process {
             $result = @{
                 File            = $excelFile
                 CoordinatePairs = @()
-                Errors          = @()
             }
 
             #region Open and get Excel sheet data
@@ -380,20 +379,12 @@ process {
             #endregion
         }
         catch {
-            $M = "Failed processing file: $_"
-            
-            $eventLogData.Add(
-                [PSCustomObject]@{
-                    DateTime  = Get-Date
-                    Error     = "Excel file '$excelFile': $M"
-                    EntryType = 'Error'
-                    EventID   = '2'
-                }
-            )
+            $systemErrors += [PSCustomObject]@{
+                DateTime = Get-Date
+                Message  = "Excel file '$excelFile': Failed processing file: $_"
+            }
 
-            Write-Warning $eventLogData[-1].Error
-
-            $result.Errors += $_
+            Write-Warning $systemErrors[-1].Message
         }
         finally {
             if ($excelPackage) {
@@ -403,20 +394,12 @@ process {
                     Close-ExcelPackage -ExcelPackage $excelPackage
                 }
                 catch {
-                    $M = "Failed to save updates in Excel file: $_"
+                    $systemErrors += [PSCustomObject]@{
+                        DateTime = Get-Date
+                        Message  = "Excel file '$excelFile': Failed to save updates in Excel file: $_"
+                    }
 
-                    $eventLogData.Add(
-                        [PSCustomObject]@{
-                            DateTime  = Get-Date
-                            Error     = "Excel file '$excelFile': $M"
-                            EntryType = 'Error'
-                            EventID   = '2'
-                        }
-                    )
-                    
-                    Write-Warning $eventLogData[-1].Error
-
-                    $result.Errors += $_
+                    Write-Warning $systemErrors[-1].Message
                 }
             }
 
@@ -1259,191 +1242,194 @@ end {
             onlyActionErrors = $saveLogFiles.What.OnlyActionErrors
         }
 
-        foreach ($logFileData in $results) {
-            $allLogFilePaths = @()
-            $logFileDataErrors = $logFileData.Where({ $_.errors })
-            $baseLogName = $null
-            $logFolderPath = $null
+        $allLogFilePaths = @()
 
-            #region Create log files
-            try {
-                $logFolder = Get-StringValueHC $saveLogFiles.Where.Folder
+        $baseLogName = $null
+        $logFolderPath = $null
+
+        #region Create system errors log file
+        try {
+            $logFolder = Get-StringValueHC $saveLogFiles.Where.Folder
            
-                if ($logFolder -and $logFileExtensions) {
-                    #region Get log folder
-                    try {
-                        $logFolderPath = Get-LogFolderHC -Path $logFolder
+            if ($logFolder -and $logFileExtensions) {
+                #region Get log folder
+                try {
+                    $logFolderPath = Get-LogFolderHC -Path $logFolder
 
-                        Write-Verbose "Log folder '$logFolderPath'"
+                    Write-Verbose "Log folder '$logFolderPath'"
 
-                        $baseLogName = Join-Path -Path $logFolderPath -ChildPath (
-                            '{0} - {1} ({2}) - {3}' -f
-                            $scriptStartTime.ToString('yyyy_MM_dd_HHmmss'),
-                            $ScriptName,
-                            $jsonFileItem.BaseName,
-                            $logFileData.File.BaseName
-                        )
-                    }
-                    catch {
-                        throw "Failed creating log folder '$LogFolder': $_"
-                    }
-                    #endregion
-
-                    #region Create log file
-                    if ($logFileData) {
-                        $params = @{
-                            PartialPath    = "$baseLogName - Log"
-                            FileExtensions = $logFileExtensions
-                        }
-
-                        if ($isLog.allActions) {
-                            $params.DataToExport = $logFileData
-                        }
-                        elseif ($isLog.onlyActionErrors -and $logFileDataErrors) {
-                            $params.DataToExport = $logFileDataErrors
-                        }
-
-                        if ($params.DataToExport) {
-                            $params.DataToExport = $params.DataToExport |
-                            Select-Object -Property @{
-                                Name       = 'dateTime'
-                                Expression = { $_.dateTime }
-                            },
-                            @{
-                                Name       = 'startCoordinate'
-                                Expression = { $_.coordinate.start }
-                            },
-                            @{
-                                Name       = 'destinationCoordinate'
-                                Expression = { $_.coordinate.destination }
-                            },
-                            @{
-                                Name       = 'distanceInMeters'
-                                Expression = { $_.apiResponse.routes[0].distance }
-                            },
-                            @{
-                                Name       = 'durationInSeconds'
-                                Expression = { $_.apiResponse.routes[0].duration }
-                            },
-                            @{
-                                Name       = 'error'
-                                Expression = { $_.errors -join ', ' }
-                            }
-
-                            $allLogFilePaths += Out-LogFileHC @params
-                        }
-                    }
-
-                    if ($isLog.SystemErrors -and $systemErrors) {
-                        $params = @{
-                            DataToExport   = $systemErrors
-                            PartialPath    = "$baseLogName - System errors log"
-                            FileExtensions = $logFileExtensions
-                        }
-                        $allLogFilePaths += Out-LogFileHC @params
-                    }
-                    #endregion
-                }
-            }
-            catch {
-                $systemErrors += [PSCustomObject]@{
-                    DateTime = Get-Date
-                    Message  = "Failed creating log file in folder '$($saveLogFiles.Where.Folder)': $_"
-                }
-
-                Write-Warning $systemErrors[-1].Message
-            }
-            #endregion
-
-            #region Remove old log files
-            if ($saveLogFiles.DeleteLogsAfterDays -gt 0 -and $logFolderPath) {
-                $cutoffDate = (Get-Date).AddDays(-$saveLogFiles.DeleteLogsAfterDays)
-
-                Write-Verbose "Removing log files older than $cutoffDate from '$logFolderPath'"
-
-                Get-ChildItem -Path $logFolderPath -File |
-                Where-Object { $_.LastWriteTime -lt $cutoffDate } |
-                ForEach-Object {
-                    try {
-                        $fileToRemove = $_
-                        Write-Verbose "Deleting old log file '$_''"
-                        Remove-Item -Path $_.FullName -Force
-                    }
-                    catch {
-                        $systemErrors += [PSCustomObject]@{
-                            DateTime = Get-Date
-                            Message  = "Failed to remove file '$fileToRemove': $_"
-                        }
-
-                        Write-Warning $systemErrors[-1].Message
-
-                        if ($baseLogName -and $isLog.systemErrors) {
-                            $params = @{
-                                DataToExport   = $systemErrors[-1]
-                                PartialPath    = "$baseLogName - Errors"
-                                FileExtensions = $logFileExtensions
-                            }
-                            $allLogFilePaths += Out-LogFileHC @params -EA Ignore
-                        }
-                    }
-                }
-            }
-            #endregion
-
-            #region Write events to event log
-            try {
-                $saveInEventLog.LogName = Get-StringValueHC $saveInEventLog.LogName
-
-                if ($saveInEventLog.Save -and $saveInEventLog.LogName) {
-                    $systemErrors | ForEach-Object {
-                        $eventLogData.Add(
-                            [PSCustomObject]@{
-                                DateTime  = $_.DateTime
-                                Error     = $_.Message
-                                EntryType = 'Error'
-                                EventID   = '2'
-                            }
-                        )
-                    }
-
-                    $eventLogData.Add(
-                        [PSCustomObject]@{
-                            Message   = 'Script ended'
-                            EntryType = 'Information'
-                            EventID   = '199'
-                        }
+                    $baseLogName = Join-Path -Path $logFolderPath -ChildPath (
+                        '{0} - {1} ({2})' -f
+                        $scriptStartTime.ToString('yyyy_MM_dd_HHmmss'),
+                        $ScriptName,
+                        $jsonFileItem.BaseName
                     )
+                }
+                catch {
+                    throw "Failed creating log folder '$LogFolder': $_"
+                }
+                #endregion
 
+                #region Create system errors log file
+                if ($isLog.SystemErrors -and $systemErrors) {
                     $params = @{
-                        Source  = $scriptName
-                        LogName = $saveInEventLog.LogName
-                        Events  = $eventLogData
-                    }
-                    Write-EventsToEventLogHC @params
-
-                }
-                elseif ($saveInEventLog.Save -and (-not $saveInEventLog.LogName)) {
-                    throw "Both 'Settings.SaveInEventLog.Save' and 'Settings.SaveInEventLog.LogName' are required to save events in the event log."
-                }
-            }
-            catch {
-                $systemErrors += [PSCustomObject]@{
-                    DateTime = Get-Date
-                    Message  = "Failed writing events to event log: $_"
-                }
-
-                Write-Warning $systemErrors[-1].Message
-
-                if ($baseLogName -and $isLog.systemErrors) {
-                    $params = @{
-                        DataToExport   = $systemErrors[-1]
-                        PartialPath    = "$baseLogName - Errors"
+                        DataToExport   = $systemErrors
+                        PartialPath    = "$baseLogName - System errors log"
                         FileExtensions = $logFileExtensions
                     }
-                    $allLogFilePaths += Out-LogFileHC @params -EA Ignore
+                    $allLogFilePaths += Out-LogFileHC @params
+                }
+                #endregion
+            }
+        }
+        catch {
+            $systemErrors += [PSCustomObject]@{
+                DateTime = Get-Date
+                Message  = "Failed creating log file in folder '$($saveLogFiles.Where.Folder)': $_"
+            }
+
+            Write-Warning $systemErrors[-1].Message
+        }
+        #endregion
+
+        #region Remove old log files
+        if ($saveLogFiles.DeleteLogsAfterDays -gt 0 -and $logFolderPath) {
+            $cutoffDate = (Get-Date).AddDays(-$saveLogFiles.DeleteLogsAfterDays)
+
+            Write-Verbose "Removing log files older than $cutoffDate from '$logFolderPath'"
+
+            Get-ChildItem -Path $logFolderPath -File |
+            Where-Object { $_.LastWriteTime -lt $cutoffDate } |
+            ForEach-Object {
+                try {
+                    $fileToRemove = $_
+                    Write-Verbose "Deleting old log file '$_''"
+                    Remove-Item -Path $_.FullName -Force
+                }
+                catch {
+                    $systemErrors += [PSCustomObject]@{
+                        DateTime = Get-Date
+                        Message  = "Failed to remove file '$fileToRemove': $_"
+                    }
+
+                    Write-Warning $systemErrors[-1].Message
+
+                    if ($baseLogName -and $isLog.systemErrors) {
+                        $params = @{
+                            DataToExport   = $systemErrors[-1]
+                            PartialPath    = "$baseLogName - Errors"
+                            FileExtensions = $logFileExtensions
+                        }
+                        $allLogFilePaths += Out-LogFileHC @params -EA Ignore
+                    }
                 }
             }
-            #endregion
+        }
+        #endregion
+
+        #region Write events to event log
+        try {
+            $saveInEventLog.LogName = Get-StringValueHC $saveInEventLog.LogName
+
+            if ($saveInEventLog.Save -and $saveInEventLog.LogName) {
+                $systemErrors | ForEach-Object {
+                    $eventLogData.Add(
+                        [PSCustomObject]@{
+                            DateTime  = $_.DateTime
+                            Error     = $_.Message
+                            EntryType = 'Error'
+                            EventID   = '2'
+                        }
+                    )
+                }
+
+                $eventLogData.Add(
+                    [PSCustomObject]@{
+                        Message   = 'Script ended'
+                        EntryType = 'Information'
+                        EventID   = '199'
+                    }
+                )
+
+                $params = @{
+                    Source  = $scriptName
+                    LogName = $saveInEventLog.LogName
+                    Events  = $eventLogData
+                }
+                Write-EventsToEventLogHC @params
+
+            }
+            elseif ($saveInEventLog.Save -and (-not $saveInEventLog.LogName)) {
+                throw "Both 'Settings.SaveInEventLog.Save' and 'Settings.SaveInEventLog.LogName' are required to save events in the event log."
+            }
+        }
+        catch {
+            $systemErrors += [PSCustomObject]@{
+                DateTime = Get-Date
+                Message  = "Failed writing events to event log: $_"
+            }
+
+            Write-Warning $systemErrors[-1].Message
+
+            if ($baseLogName -and $isLog.systemErrors) {
+                $params = @{
+                    DataToExport   = $systemErrors[-1]
+                    PartialPath    = "$baseLogName - Errors"
+                    FileExtensions = $logFileExtensions
+                }
+                $allLogFilePaths += Out-LogFileHC @params -EA Ignore
+            }
+        }
+        #endregion
+        
+        foreach ($result in $results) {
+            $logFileData = $result.CoordinatePairs
+            $logFileDataErrors = $logFileData.Where({ $_.errors })
+            
+            if ($baseLogName -and $logFileData) {
+                $params = @{
+                    PartialPath    = "$baseLogName - $($result.File.BaseName) - Log"
+                    FileExtensions = $logFileExtensions
+                    DataToExport   = $null
+                }
+
+                if ($isLog.allActions) {
+                    $params.DataToExport = $logFileData
+                }
+                elseif ($isLog.onlyActionErrors -and $logFileDataErrors) {
+                    $params.DataToExport = $logFileDataErrors
+                }
+
+                if ($params.DataToExport) {
+                    $params.DataToExport = $params.DataToExport |
+                    Select-Object -Property @{
+                        Name       = 'dateTime'
+                        Expression = { $_.dateTime }
+                    },
+                    @{
+                        Name       = 'startCoordinate'
+                        Expression = { $_.coordinate.start }
+                    },
+                    @{
+                        Name       = 'destinationCoordinate'
+                        Expression = { $_.coordinate.destination }
+                    },
+                    @{
+                        Name       = 'distanceInMeters'
+                        Expression = { $_.apiResponse.routes[0].distance }
+                    },
+                    @{
+                        Name       = 'durationInSeconds'
+                        Expression = { $_.apiResponse.routes[0].duration }
+                    },
+                    @{
+                        Name       = 'error'
+                        Expression = { $_.errors -join ', ' }
+                    }
+
+                    $allLogFilePaths += Out-LogFileHC @params
+                }
+            }
 
             #region Send email
             try {
