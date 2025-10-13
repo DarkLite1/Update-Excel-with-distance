@@ -1483,6 +1483,7 @@ end {
         try {
             switch ($sendMail.When) {
                 'Never' {
+                    $isSendMail = $false
                     break
                 }
                 'Always' {
