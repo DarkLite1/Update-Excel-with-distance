@@ -1383,10 +1383,16 @@ end {
         #endregion
         
         $isSendMail = $false
+
+        $counter = @{
+            logFileDataErrors = 0
+        }
         
         foreach ($result in $results) {
             $logFileData = $result.CoordinatePairs
             $logFileDataErrors = $logFileData.Where({ $_.errors })
+
+            $counter.logFileDataErrors += $logFileDataErrors.Count
             
             if ($baseLogName -and $logFileData) {
                 $params = @{
@@ -1586,14 +1592,14 @@ end {
                     <td>$($logFileData.Count)</td>
                 </tr>
                 $(
-                    if($logFileDataErrors.Count) {
+                    if($counter.logFileDataErrors) {
                         '<tr style="background-color: #ffe5ec;">'
                     } else {
                         '<tr>'
                     }
                 )
                     <th>Retrieval or update errors</th>
-                    <td>$($logFileDataErrors.Count)</td>
+                    <td>$($counter.logFileDataErrors)</td>
                 </tr>
                 $(
                     if($systemErrors.Count) {
@@ -1686,8 +1692,8 @@ end {
                     $mailParams.Bcc = $sendMail.Bcc
                 }
 
-                if ($systemErrors -or $logFileDataErrors) {
-                    $totalErrorCount = $systemErrors.Count + $logFileDataErrors.Count
+                if ($systemErrors -or $counter.logFileDataErrors) {
+                    $totalErrorCount = $systemErrors.Count + $counter.logFileDataErrors
 
                     $mailParams.Priority = 'High'
                     $mailParams.Subject = '{0} error{1}, {2}' -f
