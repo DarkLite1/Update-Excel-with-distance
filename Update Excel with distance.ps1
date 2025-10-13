@@ -1450,7 +1450,11 @@ end {
                         break
                     }
                     'OnErrorOrAction' {
-                        if ($systemErrors -or $logFileDataErrors -or $logFileData) {
+                        if (
+                            $systemErrors -or 
+                            $logFileDataErrors -or 
+                            $logFileData
+                        ) {
                             $isSendMail = $true
                         }
                         break

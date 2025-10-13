@@ -374,7 +374,7 @@ Describe 'when the script runs successfully' {
         }
         It 'with the correct total rows' {
             $actual | Should -HaveCount $testExportedLogFileData.Count
-        } -Tag test
+        }
         It 'with the correct data in the rows' {
             foreach ($testRow in $testExportedLogFileData) {
                 $actualRow = $actual | Where-Object {
@@ -408,5 +408,5 @@ Describe 'when the script runs successfully' {
                 ($MimeKitAssemblyPath -eq 'C:\Program Files\PackageManagement\NuGet\Packages\MimeKit.4.11.0\lib\net8.0\MimeKit.dll')
             }
         }
-    }
+    } -Tag test
 }
