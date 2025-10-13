@@ -1382,6 +1382,8 @@ end {
         }
         #endregion
         
+        $isSendMail = $false
+        
         foreach ($result in $results) {
             $logFileData = $result.CoordinatePairs
             $logFileDataErrors = $logFileData.Where({ $_.errors })
@@ -1431,27 +1433,17 @@ end {
                 }
             }
 
-            #region Send email
+            #region Test send email
             try {
-                $isSendMail = $false
-
                 switch ($sendMail.When) {
-                    'Never' {
-                        break
-                    }
-                    'Always' {
-                        $isSendMail = $true
-                        break
-                    }
                     'OnError' {
-                        if ($systemErrors -or $logFileDataErrors) {
+                        if ($logFileDataErrors) {
                             $isSendMail = $true
                         }
                         break
                     }
                     'OnErrorOrAction' {
                         if (
-                            $systemErrors -or 
                             $logFileDataErrors -or 
                             $logFileData
                         ) {
@@ -1459,37 +1451,81 @@ end {
                         }
                         break
                     }
-                    default {
-                        throw "SendMail.When '$($sendMail.When)' not supported. Supported values are 'Never', 'Always', 'OnError' or 'OnErrorOrAction'."
-                    }
+                }
+            }
+            catch {
+                $systemErrors += [PSCustomObject]@{
+                    DateTime = Get-Date
+                    Message  = "Failed sending email: $_"
                 }
 
-                if ($isSendMail) {
-                    #region Test mandatory fields
-                    @{
-                        'From'                 = $sendMail.From
-                        'Smtp.ServerName'      = $sendMail.Smtp.ServerName
-                        'Smtp.Port'            = $sendMail.Smtp.Port
-                        'AssemblyPath.MailKit' = $sendMail.AssemblyPath.MailKit
-                        'AssemblyPath.MimeKit' = $sendMail.AssemblyPath.MimeKit
-                    }.GetEnumerator() |
-                    Where-Object { -not $_.Value } | ForEach-Object {
-                        throw "Input file property 'Settings.SendMail.$($_.Key)' cannot be blank"
-                    }
-                    #endregion
+                Write-Warning $systemErrors[-1].Message
 
-                    $mailParams = @{
-                        From                = Get-StringValueHC $sendMail.From
-                        Subject             = '{0} trip{1}' -f
-                        $logFileData.Count,
-                        $(if ($logFileData.Count -ne 1) { 's' })
-                        SmtpServerName      = Get-StringValueHC $sendMail.Smtp.ServerName
-                        SmtpPort            = Get-StringValueHC $sendMail.Smtp.Port
-                        MailKitAssemblyPath = Get-StringValueHC $sendMail.AssemblyPath.MailKit
-                        MimeKitAssemblyPath = Get-StringValueHC $sendMail.AssemblyPath.MimeKit
+                if ($baseLogName -and $isLog.systemErrors) {
+                    $params = @{
+                        DataToExport   = $systemErrors[-1]
+                        PartialPath    = "$baseLogName - Errors"
+                        FileExtensions = $logFileExtensions
                     }
+                    $null = Out-LogFileHC @params -EA Ignore
+                }
+            }
+            #endregion
+        }
 
-                    $mailParams.Body = @"
+        #region Send email
+        try {
+            switch ($sendMail.When) {
+                'Never' {
+                    break
+                }
+                'Always' {
+                    $isSendMail = $true
+                    break
+                }
+                'OnError' {
+                    if ($systemErrors) {
+                        $isSendMail = $true
+                    }
+                    break
+                }
+                'OnErrorOrAction' {
+                    if ($systemErrors) {
+                        $isSendMail = $true
+                    }
+                    break
+                }
+                default {
+                    throw "SendMail.When '$($sendMail.When)' not supported. Supported values are 'Never', 'Always', 'OnError' or 'OnErrorOrAction'."
+                }
+            }
+
+            if ($isSendMail) {
+                #region Test mandatory fields
+                @{
+                    'From'                 = $sendMail.From
+                    'Smtp.ServerName'      = $sendMail.Smtp.ServerName
+                    'Smtp.Port'            = $sendMail.Smtp.Port
+                    'AssemblyPath.MailKit' = $sendMail.AssemblyPath.MailKit
+                    'AssemblyPath.MimeKit' = $sendMail.AssemblyPath.MimeKit
+                }.GetEnumerator() |
+                Where-Object { -not $_.Value } | ForEach-Object {
+                    throw "Input file property 'Settings.SendMail.$($_.Key)' cannot be blank"
+                }
+                #endregion
+
+                $mailParams = @{
+                    From                = Get-StringValueHC $sendMail.From
+                    Subject             = '{0} trip{1}' -f
+                    $logFileData.Count,
+                    $(if ($logFileData.Count -ne 1) { 's' })
+                    SmtpServerName      = Get-StringValueHC $sendMail.Smtp.ServerName
+                    SmtpPort            = Get-StringValueHC $sendMail.Smtp.Port
+                    MailKitAssemblyPath = Get-StringValueHC $sendMail.AssemblyPath.MailKit
+                    MimeKitAssemblyPath = Get-StringValueHC $sendMail.AssemblyPath.MimeKit
+                }
+
+                $mailParams.Body = @"
 <!DOCTYPE html>
 <html>
     <head>
@@ -1633,87 +1669,86 @@ end {
 </html>
 "@
 
-                    if ($sendMail.FromDisplayName) {
-                        $mailParams.FromDisplayName = Get-StringValueHC $sendMail.FromDisplayName
-                    }
-
-                    if ($sendMail.Subject) {
-                        $mailParams.Subject = '{0}, {1}' -f
-                        $mailParams.Subject, $sendMail.Subject
-                    }
-
-                    if ($sendMail.To) {
-                        $mailParams.To = $sendMail.To
-                    }
-
-                    if ($sendMail.Bcc) {
-                        $mailParams.Bcc = $sendMail.Bcc
-                    }
-
-                    if ($systemErrors -or $logFileDataErrors) {
-                        $totalErrorCount = $systemErrors.Count + $logFileDataErrors.Count
-
-                        $mailParams.Priority = 'High'
-                        $mailParams.Subject = '{0} error{1}, {2}' -f
-                        $totalErrorCount,
-                        $(if ($totalErrorCount -ne 1) { 's' }),
-                        $mailParams.Subject
-                    }
-
-                    if ($allLogFilePaths) {
-                        $mailParams.Attachments = $allLogFilePaths |
-                        Sort-Object -Unique
-                    }
-
-                    if ($sendMail.Smtp.ConnectionType) {
-                        $mailParams.SmtpConnectionType = Get-StringValueHC $sendMail.Smtp.ConnectionType
-                    }
-
-                    #region Create SMTP credential
-                    $smtpUserName = Get-StringValueHC $sendMail.Smtp.UserName
-                    $smtpPassword = Get-StringValueHC $sendMail.Smtp.Password
-
-                    if ( $smtpUserName -and $smtpPassword) {
-                        try {
-                            $securePassword = ConvertTo-SecureString -String $smtpPassword -AsPlainText -Force
-
-                            $credential = New-Object System.Management.Automation.PSCredential($smtpUserName, $securePassword)
-
-                            $mailParams.Credential = $credential
-                        }
-                        catch {
-                            throw "Failed to create credential: $_"
-                        }
-                    }
-                    elseif ($smtpUserName -or $smtpPassword) {
-                        throw "Both 'Settings.SendMail.Smtp.Username' and 'Settings.SendMail.Smtp.Password' are required when authentication is needed."
-                    }
-                    #endregion
-
-                    Write-Verbose "Send email to '$($mailParams.To)' subject '$($mailParams.Subject)'"
-
-                    Send-MailKitMessageHC @mailParams
+                if ($sendMail.FromDisplayName) {
+                    $mailParams.FromDisplayName = Get-StringValueHC $sendMail.FromDisplayName
                 }
+
+                if ($sendMail.Subject) {
+                    $mailParams.Subject = '{0}, {1}' -f
+                    $mailParams.Subject, $sendMail.Subject
+                }
+
+                if ($sendMail.To) {
+                    $mailParams.To = $sendMail.To
+                }
+
+                if ($sendMail.Bcc) {
+                    $mailParams.Bcc = $sendMail.Bcc
+                }
+
+                if ($systemErrors -or $logFileDataErrors) {
+                    $totalErrorCount = $systemErrors.Count + $logFileDataErrors.Count
+
+                    $mailParams.Priority = 'High'
+                    $mailParams.Subject = '{0} error{1}, {2}' -f
+                    $totalErrorCount,
+                    $(if ($totalErrorCount -ne 1) { 's' }),
+                    $mailParams.Subject
+                }
+
+                if ($allLogFilePaths) {
+                    $mailParams.Attachments = $allLogFilePaths |
+                    Sort-Object -Unique
+                }
+
+                if ($sendMail.Smtp.ConnectionType) {
+                    $mailParams.SmtpConnectionType = Get-StringValueHC $sendMail.Smtp.ConnectionType
+                }
+
+                #region Create SMTP credential
+                $smtpUserName = Get-StringValueHC $sendMail.Smtp.UserName
+                $smtpPassword = Get-StringValueHC $sendMail.Smtp.Password
+
+                if ( $smtpUserName -and $smtpPassword) {
+                    try {
+                        $securePassword = ConvertTo-SecureString -String $smtpPassword -AsPlainText -Force
+
+                        $credential = New-Object System.Management.Automation.PSCredential($smtpUserName, $securePassword)
+
+                        $mailParams.Credential = $credential
+                    }
+                    catch {
+                        throw "Failed to create credential: $_"
+                    }
+                }
+                elseif ($smtpUserName -or $smtpPassword) {
+                    throw "Both 'Settings.SendMail.Smtp.Username' and 'Settings.SendMail.Smtp.Password' are required when authentication is needed."
+                }
+                #endregion
+
+                Write-Verbose "Send email to '$($mailParams.To)' subject '$($mailParams.Subject)'"
+
+                Send-MailKitMessageHC @mailParams
             }
-            catch {
-                $systemErrors += [PSCustomObject]@{
-                    DateTime = Get-Date
-                    Message  = "Failed sending email: $_"
-                }
-
-                Write-Warning $systemErrors[-1].Message
-
-                if ($baseLogName -and $isLog.systemErrors) {
-                    $params = @{
-                        DataToExport   = $systemErrors[-1]
-                        PartialPath    = "$baseLogName - Errors"
-                        FileExtensions = $logFileExtensions
-                    }
-                    $null = Out-LogFileHC @params -EA Ignore
-                }
-            }
-            #endregion
         }
+        catch {
+            $systemErrors += [PSCustomObject]@{
+                DateTime = Get-Date
+                Message  = "Failed sending email: $_"
+            }
+
+            Write-Warning $systemErrors[-1].Message
+
+            if ($baseLogName -and $isLog.systemErrors) {
+                $params = @{
+                    DataToExport   = $systemErrors[-1]
+                    PartialPath    = "$baseLogName - Errors"
+                    FileExtensions = $logFileExtensions
+                }
+                $null = Out-LogFileHC @params -EA Ignore
+            }
+        }
+        #endregion
     }
     catch {
         $systemErrors += [PSCustomObject]@{
