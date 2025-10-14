@@ -14,8 +14,8 @@ BeforeAll {
         Excel      = @{
             WorksheetName = 'sheet1'
             Column        = @{
-                startDestination = 'B'
                 coordinate       = 'A'
+                startDestination = 'B'
                 distance         = 'C'
                 duration         = 'D'
             }
@@ -65,16 +65,16 @@ BeforeAll {
 
     $testData = @(
         [PSCustomObject]@{
-            Coordinate = 1; Type = 'S'; Distance = $null; Duration = $null 
+            Coordinate = 1; Type = 'S'; Distance = $null; Duration = $null
         }
         [PSCustomObject]@{
-            Coordinate = 2; Type = 'D'; Distance = $null ; Duration = $null 
+            Coordinate = 2; Type = 'D'; Distance = $null ; Duration = $null
         }
         [PSCustomObject]@{
-            Coordinate = 3; Type = 'S'; Distance = $null ; Duration = $null 
+            Coordinate = 3; Type = 'S'; Distance = $null ; Duration = $null
         }
         [PSCustomObject]@{
-            Coordinate = 4; Type = 'D'; Distance = $null ; Duration = $null 
+            Coordinate = 4; Type = 'D'; Distance = $null ; Duration = $null
         }
     )
 
@@ -356,14 +356,55 @@ Describe 'when the script runs successfully' {
         } -ParameterFilter {
             $Uri -eq 'https://router.project-osrm.org/route/v1/driving/3;4'
         }
-    
+
         $testInputFile | ConvertTo-Json -Depth 7 |
         Out-File @testOutParams
 
         .$testScript @testParams
+
+        $testMovedExcelFile = "$($testInputFile.DropFolder.ArchivePath)/File.xlsx"
     }
     It 'create archive folder' {
         $testInputFile.DropFolder.ArchivePath | Should -Exist
+    }
+    Context 'the Excel file' {
+        It 'is moved to the archive folder' {
+            $testExcelFile | Should -Not -Exist
+            $testMovedExcelFile | Should -Exist
+        }
+        Context 'is updated' {
+            BeforeAll {
+                $actual = Import-Excel -Path $testMovedExcelFile -WorksheetName $testInputFile.Excel.WorksheetName
+            }
+            It 'not empty' {
+                $actual | Should -Not -BeNullOrEmpty
+            }
+            It 'with the correct total rows' {
+                $actual | Should -HaveCount 4
+            }
+            It 'with distance and duration' {
+                foreach ($testRow in $testData) {
+                    $actualRow = $actual | Where-Object {
+                        $_.Coordinate -eq $testRow.Coordinate
+                    }
+
+                    $testDistanceInMeters = $testExportedLogFileData |
+                    Where-Object {
+                        $_.Coordinate -eq $testRow.Coordinate
+                    } | Select-Object -ExpandProperty distanceInMeters
+
+                    $testDurationInSeconds = $testExportedLogFileData |
+                    Where-Object {
+                        $_.Coordinate -eq $testRow.Coordinate
+                    } | Select-Object -ExpandProperty durationInSeconds
+
+                    $actualRow.distanceInMeters |
+                    Should -Be $testDistanceInMeters
+                    $actualRow.durationInSeconds |
+                    Should -Be $testDurationInSeconds
+                }
+            }
+        } -Tag test
     }
     Context 'create a log file' {
         BeforeAll {
@@ -380,11 +421,11 @@ Describe 'when the script runs successfully' {
                 $actualRow = $actual | Where-Object {
                     $_.startCoordinate -eq $testRow.startCoordinate
                 }
-                $actualRow.destinationCoordinate | 
+                $actualRow.destinationCoordinate |
                 Should -Be $testRow.destinationCoordinate
                 $actualRow.distanceInMeters |
                 Should -Be $testRow.distanceInMeters
-                $actualRow.durationInSeconds | 
+                $actualRow.durationInSeconds |
                 Should -Be $testRow.durationInSeconds
                 $actualRow.error | Should -Be $testRow.error
                 $actualRow.dateTime.ToString('yyyyMMdd') |

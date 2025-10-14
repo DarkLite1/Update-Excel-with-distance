@@ -185,7 +185,7 @@ process {
             try {
                 #region Open Excel file
                 Add-EventLogMessageHC "Excel file '$excelFile': Open file"
-                
+
                 $excelPackage = Open-ExcelPackage -Path $excelFile.FullName
 
                 if (-not $excelPackage) {
@@ -302,7 +302,7 @@ process {
                         ) -replace '\s'
                         Verbose = $false
                     }
-                    
+
                     Write-Verbose "$i/$($result.CoordinatePairs.Count): call API endpoint '$($params.Uri)'"
 
                     $pair.apiResponse = Invoke-RestMethod @params
@@ -360,23 +360,6 @@ process {
                 #endregion
             }
             #endregion
-
-            #region Move Excel file to archive folder
-            if ($ArchiveFolderPath) {
-                try {
-                    Add-EventLogMessageHC "Excel file '$excelFile': Move Excel file to archive folder '$ArchiveFolderPath'"
-                
-                    $params = @{
-                        LiteralPath = $excelFile.FullName
-                        Destination = $ArchiveFolderPath
-                    }
-                    Move-Item @params
-                }
-                catch {
-                    throw "Failed to move file from '$($params.LiteralPath)' to '$($params.Destination)': $_"
-                }
-            }
-            #endregion
         }
         catch {
             $systemErrors += [PSCustomObject]@{
@@ -387,10 +370,11 @@ process {
             Write-Warning $systemErrors[-1].Message
         }
         finally {
+            #region Save Excel file updates
             if ($excelPackage) {
                 try {
                     Add-EventLogMessageHC "Excel file '$excelFile': Save updates in Excel and close file"
-    
+
                     Close-ExcelPackage -ExcelPackage $excelPackage
                 }
                 catch {
@@ -402,6 +386,29 @@ process {
                     Write-Warning $systemErrors[-1].Message
                 }
             }
+            #endregion
+
+            #region Move Excel file to archive folder
+            if ($ArchiveFolderPath) {
+                try {
+                    Add-EventLogMessageHC "Excel file '$excelFile': Move Excel file to archive folder '$ArchiveFolderPath'"
+
+                    $params = @{
+                        LiteralPath = $excelFile.FullName
+                        Destination = $ArchiveFolderPath
+                    }
+                    Move-Item @params
+                }
+                catch {
+                    $systemErrors += [PSCustomObject]@{
+                        DateTime = Get-Date
+                        Message  = "Failed to move file from '$($params.LiteralPath)' to '$($params.Destination)': $_"
+                    }
+
+                    Write-Warning $systemErrors[-1].Message
+                }
+            }
+            #endregion
 
             $results += $result
         }
@@ -1250,7 +1257,7 @@ end {
         #region Create system errors log file
         try {
             $logFolder = Get-StringValueHC $saveLogFiles.Where.Folder
-           
+
             if ($logFolder -and $logFileExtensions) {
                 #region Get log folder
                 try {
@@ -1381,19 +1388,19 @@ end {
             }
         }
         #endregion
-        
+
         $isSendMail = $false
 
         $counter = @{
             logFileDataErrors = 0
         }
-        
+
         foreach ($result in $results) {
             $logFileData = $result.CoordinatePairs
             $logFileDataErrors = $logFileData.Where({ $_.errors })
 
             $counter.logFileDataErrors += $logFileDataErrors.Count
-            
+
             if ($baseLogName -and $logFileData) {
                 $params = @{
                     PartialPath    = "$baseLogName - $($result.File.BaseName) - Log"
@@ -1450,7 +1457,7 @@ end {
                     }
                     'OnErrorOrAction' {
                         if (
-                            $logFileDataErrors -or 
+                            $logFileDataErrors -or
                             $logFileData
                         ) {
                             $isSendMail = $true
