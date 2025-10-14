@@ -360,6 +360,8 @@ Describe 'when the script runs successfully' {
         $testInputFile | ConvertTo-Json -Depth 7 |
         Out-File @testOutParams
 
+        $testData | Export-Excel -Path $testExcelFile
+
         .$testScript @testParams
 
         $testMovedExcelFile = "$($testInputFile.DropFolder.ArchivePath)/File.xlsx"
@@ -405,7 +407,7 @@ Describe 'when the script runs successfully' {
                 }
             }
         }
-    } -Tag test
+    }
     Context 'create a log file' {
         BeforeAll {
             $actual = Test-GetLogFileDataHC -FileNameRegex '* - Log.json'
