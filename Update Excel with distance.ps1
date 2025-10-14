@@ -397,7 +397,7 @@ process {
                         LiteralPath = $excelFile.FullName
                         Destination = $ArchiveFolderPath
                     }
-                    Move-Item @params
+                    Move-Item @params -Force
                 }
                 catch {
                     $systemErrors += [PSCustomObject]@{
