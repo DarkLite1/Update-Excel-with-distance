@@ -21,7 +21,7 @@
       "To": ["007@example.com"],
       "Bcc": [],
       "Subject": "",
-      "Body": "<p>Update an Excel file by populating columns with the driving travel time and distance between pairs of geographic coordinates (latitude and longitude), retrieved via an API (OSRM).</p>",
+      "Body": "<p>Update an Excel file by populating columns with the driving travel time and distance between pairs of geographic coordinates (latitude and longitude), retrieved via the <a href=\"https://www.openstreetmap.org\">OpenStreetMap</a> API.</p>",
       "Smtp": {
         "ServerName": "ENV:SMTP_SERVER",
         "Port": 587,
