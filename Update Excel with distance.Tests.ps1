@@ -404,8 +404,8 @@ Describe 'when the script runs successfully' {
                     Should -Be $testDurationInSeconds
                 }
             }
-        } -Tag test
-    }
+        }
+    } -Tag test
     Context 'create a log file' {
         BeforeAll {
             $actual = Test-GetLogFileDataHC -FileNameRegex '* - Log.json'
