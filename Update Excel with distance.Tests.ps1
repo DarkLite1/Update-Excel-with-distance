@@ -65,16 +65,16 @@ BeforeAll {
 
     $testData = @(
         [PSCustomObject]@{
-            Coordinate = 1; Type = 'S'; Distance = $null; Duration = $null
+            Coordinate = 'A,1'; Type = 'S'; Distance = $null; Duration = $null
         }
         [PSCustomObject]@{
-            Coordinate = 2; Type = 'D'; Distance = $null ; Duration = $null
+            Coordinate = 'B,2'; Type = 'D'; Distance = $null ; Duration = $null
         }
         [PSCustomObject]@{
-            Coordinate = 3; Type = 'S'; Distance = $null ; Duration = $null
+            Coordinate = 'C,3'; Type = 'S'; Distance = $null ; Duration = $null
         }
         [PSCustomObject]@{
-            Coordinate = 4; Type = 'D'; Distance = $null ; Duration = $null
+            Coordinate = 'D,4'; Type = 'D'; Distance = $null ; Duration = $null
         }
     )
 
@@ -85,16 +85,16 @@ BeforeAll {
     $testExportedLogFileData = @(
         [PSCustomObject]@{
             dateTime              = Get-Date
-            startCoordinate       = 1
-            destinationCoordinate = 2
+            startCoordinate       = '1,A'
+            destinationCoordinate = '2,B'
             distanceInMeters      = 1033101.5
             durationInSeconds     = 143222.4
             error                 = ''
         }
         [PSCustomObject]@{
             dateTime              = Get-Date
-            startCoordinate       = 3
-            destinationCoordinate = 4
+            startCoordinate       = '3,C'
+            destinationCoordinate = '4,D'
             distanceInMeters      = 55000
             durationInSeconds     = 6000
             error                 = ''
@@ -341,7 +341,7 @@ Describe 'when the script runs successfully' {
                 )
             }
         } -ParameterFilter {
-            $Uri -eq 'https://router.project-osrm.org/route/v1/driving/1;2'
+            $Uri -eq 'https://router.project-osrm.org/route/v1/driving/1,A;2,B'
         }
         Mock Invoke-RestMethod {
             @{
@@ -354,7 +354,7 @@ Describe 'when the script runs successfully' {
                 )
             }
         } -ParameterFilter {
-            $Uri -eq 'https://router.project-osrm.org/route/v1/driving/3;4'
+            $Uri -eq 'https://router.project-osrm.org/route/v1/driving/3,C;4,D'
         }
 
         $testInputFile | ConvertTo-Json -Depth 7 |

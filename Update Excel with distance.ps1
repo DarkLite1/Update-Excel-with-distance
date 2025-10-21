@@ -172,6 +172,22 @@ process {
         Write-Verbose $Message
     }
 
+    function ConvertTo-LongitudeLatitudeCoordinateHC {
+        param (
+            [Parameter(Mandatory)]
+            [String]$LatitudeLongitudeCoordinate
+        )
+
+        try {
+            $parts = $LatitudeLongitudeCoordinate -split ','
+            $longitudeLatitudeCoordinate = ($parts[1].Trim() + ',' + $parts[0].Trim())
+            $longitudeLatitudeCoordinate
+        }
+        catch {
+            $Error.RemoveAt(0)
+        }
+    }
+
     $results = @()
 
     foreach ($excelFile in $excelFiles) {
@@ -264,8 +280,8 @@ process {
                     $result.CoordinatePairs += @{
                         dateTime    = Get-Date
                         coordinate  = @{
-                            start       = $startCoordinate
-                            destination = $coordinate
+                            start       = ConvertTo-LongitudeLatitudeCoordinateHC -LatitudeLongitudeCoordinate $startCoordinate
+                            destination = ConvertTo-LongitudeLatitudeCoordinateHC -LatitudeLongitudeCoordinate $coordinate
                         }
                         cellAddress = @{
                             distance = $cellAddress.distance
