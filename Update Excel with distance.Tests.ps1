@@ -85,16 +85,16 @@ BeforeAll {
     $testExportedLogFileData = @(
         [PSCustomObject]@{
             dateTime              = Get-Date
-            startCoordinate       = '1,A'
-            destinationCoordinate = '2,B'
+            startCoordinate       = 'A,1'
+            destinationCoordinate = 'B,2'
             distanceInMeters      = 1033101.5
             durationInSeconds     = 143222.4
             error                 = ''
         }
         [PSCustomObject]@{
             dateTime              = Get-Date
-            startCoordinate       = '3,C'
-            destinationCoordinate = '4,D'
+            startCoordinate       = 'C,3'
+            destinationCoordinate = 'D,4'
             distanceInMeters      = 55000
             durationInSeconds     = 6000
             error                 = ''

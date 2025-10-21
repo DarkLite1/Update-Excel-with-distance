@@ -280,8 +280,8 @@ process {
                     $result.CoordinatePairs += @{
                         dateTime    = Get-Date
                         coordinate  = @{
-                            start       = ConvertTo-LongitudeLatitudeCoordinateHC -LatitudeLongitudeCoordinate $startCoordinate
-                            destination = ConvertTo-LongitudeLatitudeCoordinateHC -LatitudeLongitudeCoordinate $coordinate
+                            start       = $startCoordinate
+                            destination = $coordinate
                         }
                         cellAddress = @{
                             distance = $cellAddress.distance
@@ -311,10 +311,14 @@ process {
                 try {
                     $i++
 
+                    $startCoordinate = ConvertTo-LongitudeLatitudeCoordinateHC -LatitudeLongitudeCoordinate $pair.coordinate.start
+
+                    $destinationCoordinate = ConvertTo-LongitudeLatitudeCoordinateHC -LatitudeLongitudeCoordinate $pair.coordinate.destination
+
                     $params = @{
                         Uri     = (
                             'https://router.project-osrm.org/route/v1/driving/{0};{1}' -f
-                            $pair.coordinate.start, $pair.coordinate.destination
+                            $startCoordinate, $destinationCoordinate
                         ) -replace '\s'
                         Verbose = $false
                     }
