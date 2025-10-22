@@ -1641,6 +1641,21 @@ end {
                 </tr>
             </table>
 
+            <table>
+                <tr>
+                    <th>Drop folder </th>
+                    <td>$('<a href="{0}">{0}</a>' -f $DropFolderPath)</td>
+                </tr>
+                $(
+                    if ($ArchiveFolderPath) {
+                        '<tr>
+                            <th>Archive folder</th>
+                            <td><a href="{0}">{0}</a></td>
+                        </tr>' -f $ArchiveFolderPath
+                    }
+                )
+            </table>
+
             $(
                 if ($allLogFilePaths) {
                     '<p><i>* Check the attachment(s) for details</i></p>'
