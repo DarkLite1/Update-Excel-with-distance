@@ -1623,7 +1623,15 @@ end {
                 </tr>
                 <tr>
                     <th>Excel files</th>
-                    <td>$($excelFiles.Count)</td>
+                    <td>
+                        <ul>
+                        $(
+                            $excelFiles.foreach(
+                                {"<li>$($_.BaseName)</li>" }
+                            )
+                        )
+                        </ul>
+                    </td>
                 </tr>
                 $(
                     if($counter.logFileDataErrors) {
