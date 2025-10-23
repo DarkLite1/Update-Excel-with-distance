@@ -443,7 +443,7 @@ Describe 'when the script runs successfully' {
                 ($SmtpPort -eq 25) -and
                 ($SmtpServerName -eq 'SMTP_SERVER') -and
                 ($SmtpConnectionType -eq 'StartTls') -and
-                ($Subject -eq '2 trips, Email subject') -and
+                ($Subject -eq '2 trips, 1 file, Email subject') -and
                 ($Credential) -and
                 ($Attachments -like '*- Log.json') -and
                 ($Body -like '*Email body*<th>Start and destination pairs</th>*<td>2</td>*') -and

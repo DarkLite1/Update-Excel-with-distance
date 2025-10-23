@@ -1550,9 +1550,11 @@ end {
 
                 $mailParams = @{
                     From                = Get-StringValueHC $sendMail.From
-                    Subject             = '{0} trip{1}' -f
+                    Subject             = '{0} trip{1}, {2} file{3}' -f
                     $logFileData.Count,
-                    $(if ($logFileData.Count -ne 1) { 's' })
+                    $(if ($logFileData.Count -ne 1) { 's' }),
+                    $excelFiles.Count,
+                    $(if ($excelFiles.Count -ne 1) { 's' })
                     SmtpServerName      = Get-StringValueHC $sendMail.Smtp.ServerName
                     SmtpPort            = Get-StringValueHC $sendMail.Smtp.Port
                     MailKitAssemblyPath = Get-StringValueHC $sendMail.AssemblyPath.MailKit
