@@ -1617,22 +1617,6 @@ end {
             $($sendMail.Body)
 
             <table>
-                <tr>
-                    <th>Start and destination pairs</th>
-                    <td>$($logFileData.Count)</td>
-                </tr>
-                <tr>
-                    <th>Excel files</th>
-                    <td>
-                        <ul>
-                        $(
-                            $excelFiles.foreach(
-                                {"<li>$($_.BaseName)</li>" }
-                            )
-                        )
-                        </ul>
-                    </td>
-                </tr>
                 $(
                     if($counter.logFileDataErrors) {
                         "<tr style=`"background-color: #ffe5ec;`">
@@ -1649,6 +1633,22 @@ end {
                         </tr>"
                     }
                 )
+                <tr>
+                    <th>Start and destination pairs</th>
+                    <td>$($logFileData.Count)</td>
+                </tr>
+                <tr>
+                    <th>Excel files</th>
+                    <td>
+                        <ul>
+                        $(
+                            $excelFiles.foreach(
+                                {"<li>$($_.BaseName)</li>" }
+                            )
+                        )
+                        </ul>
+                    </td>
+                </tr>
                 <tr>
                     <th>Drop folder</th>
                     <td>$('<a href="{0}">{0}</a>' -f $DropFolderPath)</td>
