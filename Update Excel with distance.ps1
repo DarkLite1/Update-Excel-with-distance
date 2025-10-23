@@ -1621,6 +1621,10 @@ end {
                     <th>Start and destination pairs</th>
                     <td>$($logFileData.Count)</td>
                 </tr>
+                <tr>
+                    <th>Excel files</th>
+                    <td>$($excelFiles.Count)</td>
+                </tr>
                 $(
                     if($counter.logFileDataErrors) {
                         "<tr style=`"background-color: #ffe5ec;`">
