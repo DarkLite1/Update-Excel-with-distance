@@ -446,7 +446,7 @@ Describe 'when the script runs successfully' {
                 ($Subject -eq '2 trips, Email subject') -and
                 ($Credential) -and
                 ($Attachments -like '*- Log.json') -and
-                ($Body -like '*Email body*<th>Start and destination pairs</th>*<td>2</td>*<th>Retrieval or update errors</th>*<td>0</td>*<th>System errors</th>*<td>0</td>*') -and
+                ($Body -like '*Email body*<th>Start and destination pairs</th>*<td>2</td>*') -and
                 ($MailKitAssemblyPath -eq 'C:\Program Files\PackageManagement\NuGet\Packages\MailKit.4.11.0\lib\net8.0\MailKit.dll') -and
                 ($MimeKitAssemblyPath -eq 'C:\Program Files\PackageManagement\NuGet\Packages\MimeKit.4.11.0\lib\net8.0\MimeKit.dll')
             }

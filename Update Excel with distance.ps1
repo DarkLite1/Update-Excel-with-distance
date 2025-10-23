@@ -1621,29 +1621,22 @@ end {
                 </tr>
                 $(
                     if($counter.logFileDataErrors) {
-                        '<tr style="background-color: #ffe5ec;">'
-                    } else {
-                        '<tr>'
+                        "<tr style=`"background-color: #ffe5ec;`">
+                            <th>Retrieval or update errors</th>
+                            <td>$($counter.logFileDataErrors)</td>
+                        </tr>"
                     }
                 )
-                    <th>Retrieval or update errors</th>
-                    <td>$($counter.logFileDataErrors)</td>
-                </tr>
                 $(
                     if($systemErrors.Count) {
-                        '<tr style="background-color: #ffe5ec;">'
-                    } else {
-                        '<tr>'
+                        "<tr style=`"background-color: #ffe5ec;`">
+                           <th>System errors</th>
+                            <td>$($systemErrors.Count)</td>
+                        </tr>"
                     }
                 )
-                    <th>System errors</th>
-                    <td>$($systemErrors.Count)</td>
-                </tr>
-            </table>
-
-            <table>
                 <tr>
-                    <th>Drop folder </th>
+                    <th>Drop folder</th>
                     <td>$('<a href="{0}">{0}</a>' -f $DropFolderPath)</td>
                 </tr>
                 $(
